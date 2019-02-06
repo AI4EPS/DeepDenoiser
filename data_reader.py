@@ -323,7 +323,8 @@ class DataReader_pred(object):
 
 
   def dequeue(self, num_elements):
-    output = self.queue.dequeue_many(num_elements)
+    # output = self.queue.dequeue_many(num_elements)
+    output = self.queue.dequeue_up_to(num_elements)
     return output
 
   def thread_main(self, sess, n_threads=1, start=0):

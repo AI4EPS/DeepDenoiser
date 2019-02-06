@@ -57,7 +57,7 @@ def plot_result(epoch, num, fig_dir, logits, preds, X, Y):
     plt.tight_layout()
     plt.gcf().align_labels()
     plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d.png" % (epoch, i)), bbox_inches='tight')
-    plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d.pdf" % (epoch, i)), bbox_inches='tight')
+    # plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d.pdf" % (epoch, i)), bbox_inches='tight')
 
 
 def plot_pred(epoch, num, fig_dir, logits, preds, X):
@@ -89,7 +89,7 @@ def plot_pred(epoch, num, fig_dir, logits, preds, X):
     plt.tight_layout()
     plt.gcf().align_labels()
     plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d.png" % (epoch, i)), bbox_inches='tight')
-    plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d.pdf" % (epoch, i)), bbox_inches='tight')
+    # plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d.pdf" % (epoch, i)), bbox_inches='tight')
 
 
 def plot_pred_thread(i, fig_dir, logits, preds, X, epoch=0, fname=None, data_dir=None):
@@ -115,36 +115,38 @@ def plot_pred_thread(i, fig_dir, logits, preds, X, epoch=0, fname=None, data_dir
   fig_size = plt.gcf().get_size_inches()
   plt.gcf().set_size_inches(fig_size*[1, 1.2])
 
+  vmax = np.std(np.abs(X[i, :, :, 0]+X[i, :, :, 1]*1j)) * 2
+
   plt.subplot(311)
   plt.pcolormesh(t_FT, f_FT, np.abs(
-      X[i, :, :, 0]+X[i, :, :, 1]*1j), vmin=0, vmax=1, label='Noisy signal')
+      X[i, :, :, 0]+X[i, :, :, 1]*1j), vmin=0, vmax=vmax, label='Noisy signal')
   plt.gca().set_xticklabels([])
-  plt.text(text_loc[0], text_loc[1], '(i)', horizontalalignment='left',
+  plt.text(text_loc[0], text_loc[1], '(i)', horizontalalignment='center',
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
   plt.subplot(312)
   plt.pcolormesh(t_FT, f_FT, np.abs(
-      X[i, :, :, 0]+X[i, :, :, 1]*1j)*preds[i, :, :, 0], vmin=0, vmax=1, label='Recovered signal')
+      X[i, :, :, 0]+X[i, :, :, 1]*1j)*preds[i, :, :, 0], vmin=0, vmax=vmax, label='Recovered signal')
   plt.gca().set_xticklabels([])
   plt.ylabel("Frequency (Hz)", fontsize='large')
-  plt.text(text_loc[0], text_loc[1], '(ii)', horizontalalignment='left',
+  plt.text(text_loc[0], text_loc[1], '(ii)', horizontalalignment='center',
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
 
   plt.subplot(313)
   plt.pcolormesh(t_FT, f_FT, np.abs(
-      X[i, :, :, 0]+X[i, :, :, 1]*1j)*preds[i, :, :, 1], vmin=0, vmax=1, label='Recovered noise')
+      X[i, :, :, 0]+X[i, :, :, 1]*1j)*preds[i, :, :, 1], vmin=0, vmax=vmax, label='Recovered noise')
   plt.gca().set_xticklabels([])
   plt.xlabel("Time (s)", fontsize='large')
-  plt.text(text_loc[0], text_loc[1], '(iii)', horizontalalignment='left',
+  plt.text(text_loc[0], text_loc[1], '(iii)', horizontalalignment='center',
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
 
   if fname is None:
     plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_FT.png" % (epoch, i)), bbox_inches='tight')
-    plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_FT.pdf" % (epoch, i)), bbox_inches='tight')
+    # plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_FT.pdf" % (epoch, i)), bbox_inches='tight')
   else:
     plt.savefig(os.path.join(
         fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_FT.png'), bbox_inches='tight')
-    plt.savefig(os.path.join(
-        fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_FT.pdf'), bbox_inches='tight')
+    # plt.savefig(os.path.join(
+        # fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_FT.pdf'), bbox_inches='tight')
   plt.close(i)
 
   plt.figure(i)
@@ -166,7 +168,7 @@ def plot_pred_thread(i, fig_dir, logits, preds, X, epoch=0, fname=None, data_dir
   plt.ylim(signal_ylim)
   plt.gca().set_xticklabels([])
   plt.legend(loc='lower left', fontsize='medium')
-  plt.text(text_loc[0], text_loc[1], '(i)', horizontalalignment='left',
+  plt.text(text_loc[0], text_loc[1], '(i)', horizontalalignment='center',
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
 
   ax5 = plt.subplot(312)
@@ -176,7 +178,7 @@ def plot_pred_thread(i, fig_dir, logits, preds, X, epoch=0, fname=None, data_dir
   plt.gca().set_xticklabels([])
   plt.ylabel("Amplitude",  fontsize='large')
   plt.legend(loc='lower left', fontsize='medium')
-  plt.text(text_loc[0], text_loc[1], '(ii)', horizontalalignment='left',
+  plt.text(text_loc[0], text_loc[1], '(ii)', horizontalalignment='center',
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
 
   plt.subplot(313)
@@ -185,7 +187,7 @@ def plot_pred_thread(i, fig_dir, logits, preds, X, epoch=0, fname=None, data_dir
   plt.ylim(signal_ylim)
   plt.xlabel("Time (s)", fontsize='large')
   plt.legend(loc='lower left', fontsize='medium')
-  plt.text(text_loc[0], text_loc[1], '(iii)', horizontalalignment='left',
+  plt.text(text_loc[0], text_loc[1], '(iii)', horizontalalignment='center',
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
 
   if (data_dir is not None) and (fname is not None):
@@ -215,14 +217,15 @@ def plot_pred_thread(i, fig_dir, logits, preds, X, epoch=0, fname=None, data_dir
 
   if fname is None:
     plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_wave.png" % (epoch, i)), bbox_inches='tight')
-    plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_wave.pdf" % (epoch, i)), bbox_inches='tight')
+    # plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_wave.pdf" % (epoch, i)), bbox_inches='tight')
   else:
     plt.savefig(os.path.join(
         fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_wave.png'), bbox_inches='tight')
-    plt.savefig(os.path.join(
-        fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_wave.pdf'), bbox_inches='tight')
+    # plt.savefig(os.path.join(
+        # fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_wave.pdf'), bbox_inches='tight')
 
   plt.close(i)
+  print(i)
   return 0
 
 
@@ -251,41 +254,41 @@ def plot_thread(i, fig_dir, logits, preds, X, Y, signal_FT=None, noise_FT=None, 
   plt.subplot(511)
   plt.pcolormesh(t_FT, f_FT, np.abs(signal_FT[i, :, :]), vmin=0, vmax=1)
   plt.gca().set_xticklabels([])
-  plt.text(text_loc[0], text_loc[1], '(i)', horizontalalignment='left',
+  plt.text(text_loc[0], text_loc[1], '(i)', horizontalalignment='center',
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
   plt.subplot(512)
   plt.pcolormesh(t_FT, f_FT, np.abs(noise_FT[i, :, :]), vmin=0, vmax=1)
   plt.gca().set_xticklabels([])
-  plt.text(text_loc[0], text_loc[1], '(ii)', horizontalalignment='left',
+  plt.text(text_loc[0], text_loc[1], '(ii)', horizontalalignment='center',
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
   plt.subplot(513)
   plt.pcolormesh(t_FT, f_FT, np.abs(
       X[i, :, :, 0]+X[i, :, :, 1]*1j), vmin=0, vmax=1)
   plt.ylabel("Frequency (Hz)", fontsize='large')
   plt.gca().set_xticklabels([])
-  plt.text(text_loc[0], text_loc[1], '(iii)', horizontalalignment='left',
+  plt.text(text_loc[0], text_loc[1], '(iii)', horizontalalignment='center',
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
   plt.subplot(514)
   plt.pcolormesh(t_FT, f_FT, np.abs(
       X[i, :, :, 0]+X[i, :, :, 1]*1j)*preds[i, :, :, 0], vmin=0, vmax=1)
   plt.gca().set_xticklabels([])
-  plt.text(text_loc[0], text_loc[1], '(iv)', horizontalalignment='left',
+  plt.text(text_loc[0], text_loc[1], '(iv)', horizontalalignment='center',
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
   plt.subplot(515)
   plt.pcolormesh(t_FT, f_FT, np.abs(
       X[i, :, :, 0]+X[i, :, :, 1]*1j)*preds[i, :, :, 1], vmin=0, vmax=1)
   plt.xlabel("Time (s)", fontsize='large')
-  plt.text(text_loc[0], text_loc[1], '(v)', horizontalalignment='left',
+  plt.text(text_loc[0], text_loc[1], '(v)', horizontalalignment='center',
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
 
   if fname is None:
     plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_FT.png" % (epoch, i)), bbox_inches='tight')
-    plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_FT.pdf" % (epoch, i)), bbox_inches='tight')
+    # plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_FT.pdf" % (epoch, i)), bbox_inches='tight')
   else:
     plt.savefig(os.path.join(fig_dir, fname[i].decode().split(
         '/')[-1].rstrip('.npz')+'_FT.png'), bbox_inches='tight')
-    plt.savefig(os.path.join(fig_dir, fname[i].decode().split(
-        '/')[-1].rstrip('.npz')+'_FT.pdf'), bbox_inches='tight')
+    # plt.savefig(os.path.join(fig_dir, fname[i].decode().split(
+        # '/')[-1].rstrip('.npz')+'_FT.pdf'), bbox_inches='tight')
   plt.close(i)
 
   text_loc = [0.05, 0.8]
@@ -305,7 +308,7 @@ def plot_thread(i, fig_dir, logits, preds, X, Y, signal_FT=None, noise_FT=None, 
   plt.ylim(signal_ylim)
   plt.ylabel("Amplitude", fontsize='large')
   plt.gca().set_xticklabels([])
-  plt.text(text_loc[0], text_loc[1], '(iii)', horizontalalignment='left',
+  plt.text(text_loc[0], text_loc[1], '(iii)', horizontalalignment='center',
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
 
   ax1 = plt.subplot(511)
@@ -316,7 +319,7 @@ def plot_thread(i, fig_dir, logits, preds, X, Y, signal_FT=None, noise_FT=None, 
   plt.xlim([np.around(t1[0]), np.around(t1[-1])])
   plt.ylim(signal_ylim)
   plt.gca().set_xticklabels([])
-  plt.text(text_loc[0], text_loc[1], '(i)', horizontalalignment='left',
+  plt.text(text_loc[0], text_loc[1], '(i)', horizontalalignment='center',
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
 
   plt.subplot(512)
@@ -330,7 +333,7 @@ def plot_thread(i, fig_dir, logits, preds, X, Y, signal_FT=None, noise_FT=None, 
                 np.max(np.abs(noise[100:-100]))]
   plt.ylim(noise_ylim)
   plt.gca().set_xticklabels([])
-  plt.text(text_loc[0], text_loc[1], '(ii)', horizontalalignment='left',
+  plt.text(text_loc[0], text_loc[1], '(ii)', horizontalalignment='center',
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
 
   ax4 = plt.subplot(514)
@@ -341,7 +344,7 @@ def plot_thread(i, fig_dir, logits, preds, X, Y, signal_FT=None, noise_FT=None, 
   plt.xlim([np.around(t1[0]), np.around(t1[-1])])
   plt.ylim(signal_ylim)
   plt.gca().set_xticklabels([])
-  plt.text(text_loc[0], text_loc[1], '(iv)', horizontalalignment='left',
+  plt.text(text_loc[0], text_loc[1], '(iv)', horizontalalignment='center',
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
 
   plt.subplot(515)
@@ -352,7 +355,7 @@ def plot_thread(i, fig_dir, logits, preds, X, Y, signal_FT=None, noise_FT=None, 
   plt.xlim([np.around(t1[0]), np.around(t1[-1])])
   plt.xlabel("Time (s)", fontsize='large')
   plt.ylim(noise_ylim)
-  plt.text(text_loc[0], text_loc[1], '(v)', horizontalalignment='left',
+  plt.text(text_loc[0], text_loc[1], '(v)', horizontalalignment='center',
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
 
   if (data_dir is not None) and (fname is not None):
@@ -393,12 +396,12 @@ def plot_thread(i, fig_dir, logits, preds, X, Y, signal_FT=None, noise_FT=None, 
 
   if fname is None:
     plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_wave.png" % (epoch, i)), bbox_inches='tight')
-    plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_wave.pdf" % (epoch, i)), bbox_inches='tight')
+    # plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_wave.pdf" % (epoch, i)), bbox_inches='tight')
   else:
     plt.savefig(os.path.join(fig_dir, fname[i].decode().split(
         '/')[-1].rstrip('.npz')+'_wave.png'), bbox_inches='tight')
-    plt.savefig(os.path.join(fig_dir, fname[i].decode().split(
-        '/')[-1].rstrip('.npz')+'_wave.pdf'), bbox_inches='tight')
+    # plt.savefig(os.path.join(fig_dir, fname[i].decode().split(
+        # '/')[-1].rstrip('.npz')+'_wave.pdf'), bbox_inches='tight')
   plt.close(i)
 
 def plot_thread_nosignal(i, fig_dir, logits, preds, X, Y, signal_FT=None, noise_FT=None, epoch=0, fname=None, data_dir=None):
@@ -427,30 +430,30 @@ def plot_thread_nosignal(i, fig_dir, logits, preds, X, Y, signal_FT=None, noise_
   plt.pcolormesh(t_FT, f_FT, np.abs(
       X[i, :, :, 0]+X[i, :, :, 1]*1j), vmin=0, vmax=1)
   plt.gca().set_xticklabels([])
-  plt.text(text_loc[0], text_loc[1], '(i)', horizontalalignment='left',
+  plt.text(text_loc[0], text_loc[1], '(i)', horizontalalignment='center',
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
   plt.subplot(312)
   plt.pcolormesh(t_FT, f_FT, np.abs(
       X[i, :, :, 0]+X[i, :, :, 1]*1j)*preds[i, :, :, 0], vmin=0, vmax=1)
   plt.ylabel("Frequency (Hz)", fontsize='large')
   plt.gca().set_xticklabels([])
-  plt.text(text_loc[0], text_loc[1], '(ii)', horizontalalignment='left',
+  plt.text(text_loc[0], text_loc[1], '(ii)', horizontalalignment='center',
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
   plt.subplot(313)
   plt.pcolormesh(t_FT, f_FT, np.abs(
       X[i, :, :, 0]+X[i, :, :, 1]*1j)*preds[i, :, :, 1], vmin=0, vmax=1)
   plt.xlabel("Time (s)", fontsize='large')
-  plt.text(text_loc[0], text_loc[1], '(iii)', horizontalalignment='left',
+  plt.text(text_loc[0], text_loc[1], '(iii)', horizontalalignment='center',
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
 
   if fname is None:
     plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_FT.png" % (epoch, i)), bbox_inches='tight')
-    plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_FT.pdf" % (epoch, i)), bbox_inches='tight')
+    # plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_FT.pdf" % (epoch, i)), bbox_inches='tight')
   else:
     plt.savefig(os.path.join(fig_dir, fname[i].decode().split(
         '/')[-1].rstrip('.npz')+'_FT.png'), bbox_inches='tight')
-    plt.savefig(os.path.join(fig_dir, fname[i].decode().split(
-        '/')[-1].rstrip('.npz')+'_FT.pdf'), bbox_inches='tight')
+    # plt.savefig(os.path.join(fig_dir, fname[i].decode().split(
+        # '/')[-1].rstrip('.npz')+'_FT.pdf'), bbox_inches='tight')
   plt.close(i)
 
   text_loc = [0.05, 0.8]
@@ -525,12 +528,12 @@ def plot_thread_nosignal(i, fig_dir, logits, preds, X, Y, signal_FT=None, noise_
 
   if fname is None:
     plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_wave.png" % (epoch, i)), bbox_inches='tight')
-    plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_wave.pdf" % (epoch, i)), bbox_inches='tight')
+    # plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_wave.pdf" % (epoch, i)), bbox_inches='tight')
   else:
     plt.savefig(os.path.join(fig_dir, fname[i].decode().split(
         '/')[-1].rstrip('.npz')+'_wave.png'), bbox_inches='tight')
-    plt.savefig(os.path.join(fig_dir, fname[i].decode().split(
-        '/')[-1].rstrip('.npz')+'_wave.pdf'), bbox_inches='tight')
+    # plt.savefig(os.path.join(fig_dir, fname[i].decode().split(
+        # '/')[-1].rstrip('.npz')+'_wave.pdf'), bbox_inches='tight')
   plt.close(i)
 
 

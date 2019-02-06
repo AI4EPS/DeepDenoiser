@@ -395,7 +395,7 @@ def debug_fn(flags, data_reader, fig_dir=None, save_results=True):
 
 def pred_fn(flags, data_reader, fig_dir=None, npz_dir=None, log_dir=None):
   current_time = time.strftime("%m%d%H%M%S")
-  if not log_dir is None:
+  if log_dir is None:
     log_dir = os.path.join(flags.logdir, "pred", current_time)
   logging.info("Pred log: %s" % log_dir)
   # logging.info("Dataset size: {}".format(data_reader.num_data))
@@ -422,7 +422,6 @@ def pred_fn(flags, data_reader, fig_dir=None, npz_dir=None, log_dir=None):
 
   with tf.Session(config=sess_config) as sess:
 
-    summary_writer = tf.summary.FileWriter(log_dir, sess.graph)
     saver = tf.train.Saver(tf.global_variables(), max_to_keep=5)
     init = tf.global_variables_initializer()
     sess.run(init)
@@ -440,7 +439,8 @@ def pred_fn(flags, data_reader, fig_dir=None, npz_dir=None, log_dir=None):
     X = []
     fname = []
 
-    for step in tqdm(range(0, data_reader.n_signal-flags.batch_size+1, flags.batch_size), desc="Pred"):
+    pool = multiprocessing.Pool(multiprocessing.cpu_count()*5)
+    for step in tqdm(range(0, data_reader.n_signal, flags.batch_size), desc="Pred"):
       X_batch, ratio_batch, fname_batch = sess.run(batch)
       preds_batch, logits_batch = model.predict_on_batch(sess, X_batch)
       
@@ -449,31 +449,37 @@ def pred_fn(flags, data_reader, fig_dir=None, npz_dir=None, log_dir=None):
       X.append(X_batch*ratio_batch[:,np.newaxis,np.newaxis,np.newaxis])
       fname.extend(fname_batch)
 
-      # plot_pred(step//flags.batch_size, flags.plot_number, fig_dir,
-      #         logits_batch, preds_batch, X_batch*ratio_batch[:,np.newaxis,np.newaxis,np.newaxis])
+      # if flags.save_pred:
+      #   print('Saving pred')
+      #   pool.map(partial(istft_thread, 
+      #                   npz_dir=npz_dir,
+      #                   logits=logits_batch, 
+      #                   preds=preds_batch, 
+      #                   X=X_batch*ratio_batch[:,np.newaxis,np.newaxis,np.newaxis],
+      #                   epoch=step//flags.batch_size,
+      #                   fname=fname_batch), 
+      #                 #  fname=fname_batch, data_dir="../Dataset/Demo/HNE_HNN_HNZ"), 
+      #             range(len(X_batch)))
+      # with multiprocessing.Pool(multiprocessing.cpu_count()*5) as pool:
+      if flags.plot_pred:
+        print('Ploting pred')
+        pool.map(partial(plot_pred_thread, 
+                        fig_dir=fig_dir,
+                        logits=logits_batch, 
+                        preds=preds_batch, 
+                        X=X_batch*ratio_batch[:,np.newaxis,np.newaxis,np.newaxis],
+                        # epoch=step//flags.batch_size,
+                        fname=fname_batch), 
+                      #  fname=fname_batch, data_dir="../Dataset/Demo/HNE_HNN_HNZ"), 
+                range(len(X_batch)))
+        print('Finishing plotting')
 
-      with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
-        if flags.save_pred:
-          pool.map(partial(istft_thread, 
-                          npz_dir=npz_dir,
-                          logits=logits_batch, 
-                          preds=preds_batch, 
-                          X=X_batch*ratio_batch[:,np.newaxis,np.newaxis,np.newaxis],
-                          epoch=step//flags.batch_size,
-                          fname=fname_batch), 
-                        #  fname=fname_batch, data_dir="../Dataset/Demo/HNE_HNN_HNZ"), 
-                    range(len(X_batch)))
-        if flags.plot_pred:
-          pool.map(partial(plot_pred_thread, 
-                          fig_dir=fig_dir,
-                          logits=logits_batch, 
-                          preds=preds_batch, 
-                          X=X_batch*ratio_batch[:,np.newaxis,np.newaxis,np.newaxis],
-                          epoch=step//flags.batch_size,
-                          fname=fname_batch), 
-                        #  fname=fname_batch, data_dir="../Dataset/Demo/HNE_HNN_HNZ"), 
-                    range(len(X_batch)))
-
+      if step + flags.batch_size >= data_reader.n_signal:
+        for t in threads:
+          t.join()
+        sess.run(data_reader.queue.close())
+    
+    pool.close()
     if flags.save_pred:
       preds = np.vstack(preds)
       logits = np.vstack(logits)
@@ -481,7 +487,6 @@ def pred_fn(flags, data_reader, fig_dir=None, npz_dir=None, log_dir=None):
       np.savez(os.path.join(log_dir, flags.fpred), preds=preds, logits=logits, X=X, fname=fname)
 
   return 0
-
 
 def main(flags):
 
@@ -531,8 +536,8 @@ def main(flags):
   elif flags.mode == "pred":
     with tf.name_scope('create_inputs'):
       data_reader = DataReader_pred(
-          signal_dir="../Demo/HNE_HNN_HNZ",
-          signal_list="../Demo/HNE_HNN_HNZ.csv",
+          signal_dir="../DAS/NPZ",
+          signal_list="../DAS/fname.csv",
           queue_size=flags.batch_size*2,
           coord=coord)
     pred_fn(flags, data_reader)
