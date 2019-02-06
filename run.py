@@ -5,9 +5,7 @@ import os
 import time
 import logging
 from unet import UNet
-import util_data_queue as util_data
-from util_data_queue import Config, DataReader_pred
-from util_plot import *
+from data_reader import *
 from util import *
 from tqdm import tqdm
 import multiprocessing
@@ -395,10 +393,12 @@ def debug_fn(flags, data_reader, fig_dir=None, save_results=True):
 
   return 0
 
-def pred_fn(flags, data_reader, fig_dir=None, npz_dir=None, save_results=True):
+def pred_fn(flags, data_reader, fig_dir=None, npz_dir=None, log_dir=None):
   current_time = time.strftime("%m%d%H%M%S")
-  logging.info("Pred: %s" % current_time)
-  log_dir = os.path.join(flags.logdir, "pred", current_time)
+  if not log_dir is None:
+    log_dir = os.path.join(flags.logdir, "pred", current_time)
+  logging.info("Pred log: %s" % log_dir)
+  # logging.info("Dataset size: {}".format(data_reader.num_data))
   if not os.path.exists(log_dir):
     os.makedirs(log_dir)
   if fig_dir is None:
@@ -497,8 +497,7 @@ def main(flags):
           noise_dir="../Dataset/STFT_Noise/HNE_HNN_HNZ",
           noise_list="../Dataset/STFT_Noise/HNE_HNN_HNZ.csv",
           queue_size=flags.batch_size*2,
-          coord=coord,
-          config=util_data.Config())
+          coord=coord)
     logging.info("Dataset size: training %d, validation %d, test %d" % 
         (data_reader.n_train, data_reader.n_valid, data_reader.n_test))
     train_fn(flags, data_reader)
@@ -511,8 +510,7 @@ def main(flags):
           noise_dir="../Dataset/STFT_Noise/HNE_HNN_HNZ",
           noise_list="../Dataset/STFT_Noise/HNE_HNN_HNZ.csv",
           queue_size=flags.batch_size*2,
-          coord=coord,
-          config=util_data.Config())
+          coord=coord)
     logging.info("Dataset Size: training %d, validation %d, test %d" % 
         (data_reader.n_train, data_reader.n_valid, data_reader.n_test))
     valid_fn(flags, data_reader)
@@ -525,8 +523,7 @@ def main(flags):
           noise_dir="../Dataset/STFT_Noise/HNE_HNN_HNZ",
           noise_list="../Dataset/STFT_Noise/HNE_HNN_HNZ.csv",
           queue_size=flags.batch_size*2,
-          coord=coord,
-          config=util_data.Config())
+          coord=coord)
     logging.info("Dataset Size: training %d, validation %d, test %d" % 
         (data_reader.n_train, data_reader.n_valid, data_reader.n_test))
     debug_fn(flags, data_reader)
@@ -534,11 +531,10 @@ def main(flags):
   elif flags.mode == "pred":
     with tf.name_scope('create_inputs'):
       data_reader = DataReader_pred(
-          signal_dir="./Dataset/HNE_HNN_HNZ",
-          signal_list="./Dataset/HNE_HNN_HNZ.csv",
+          signal_dir="../Demo/HNE_HNN_HNZ",
+          signal_list="../Demo/HNE_HNN_HNZ.csv",
           queue_size=flags.batch_size*2,
-          coord=coord,
-          config=util_data.Config())
+          coord=coord)
     pred_fn(flags, data_reader)
 
   else:
