@@ -439,7 +439,7 @@ def pred_fn(flags, data_reader, fig_dir=None, npz_dir=None, log_dir=None):
     X = []
     fname = []
 
-    pool = multiprocessing.Pool(multiprocessing.cpu_count()*5)
+    pool = multiprocessing.Pool(multiprocessing.cpu_count()*2)
     for step in tqdm(range(0, data_reader.n_signal, flags.batch_size), desc="Pred"):
       X_batch, ratio_batch, fname_batch = sess.run(batch)
       preds_batch, logits_batch = model.predict_on_batch(sess, X_batch)
@@ -449,18 +449,18 @@ def pred_fn(flags, data_reader, fig_dir=None, npz_dir=None, log_dir=None):
       X.append(X_batch*ratio_batch[:,np.newaxis,np.newaxis,np.newaxis])
       fname.extend(fname_batch)
 
-      # if flags.save_pred:
-      #   print('Saving pred')
-      #   pool.map(partial(istft_thread, 
-      #                   npz_dir=npz_dir,
-      #                   logits=logits_batch, 
-      #                   preds=preds_batch, 
-      #                   X=X_batch*ratio_batch[:,np.newaxis,np.newaxis,np.newaxis],
-      #                   epoch=step//flags.batch_size,
-      #                   fname=fname_batch), 
-      #                 #  fname=fname_batch, data_dir="../Dataset/Demo/HNE_HNN_HNZ"), 
-      #             range(len(X_batch)))
-      # with multiprocessing.Pool(multiprocessing.cpu_count()*5) as pool:
+      if flags.save_pred:
+        print('Saving pred')
+        pool.map(partial(istft_thread, 
+                        npz_dir=npz_dir,
+                        logits=logits_batch, 
+                        preds=preds_batch, 
+                        X=X_batch*ratio_batch[:,np.newaxis,np.newaxis,np.newaxis],
+                        epoch=step//flags.batch_size,
+                        fname=fname_batch), 
+                      #  fname=fname_batch, data_dir="../Dataset/Demo/HNE_HNN_HNZ"), 
+                  range(len(X_batch)))
+
       if flags.plot_pred:
         print('Ploting pred')
         pool.map(partial(plot_pred_thread, 
