@@ -115,7 +115,7 @@ def plot_pred_thread(i, fig_dir, logits, preds, X, epoch=0, fname=None, data_dir
   fig_size = plt.gcf().get_size_inches()
   plt.gcf().set_size_inches(fig_size*[1, 1.2])
 
-  vmax = np.std(np.abs(X[i, :, :, 0]+X[i, :, :, 1]*1j)) * 2
+  vmax = np.std(np.abs(X[i, :, :, 0]+X[i, :, :, 1]*1j)) * 1.8
 
   plt.subplot(311)
   plt.pcolormesh(t_FT, f_FT, np.abs(
@@ -225,7 +225,6 @@ def plot_pred_thread(i, fig_dir, logits, preds, X, epoch=0, fname=None, data_dir
         # fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_wave.pdf'), bbox_inches='tight')
 
   plt.close(i)
-  print(i)
   return 0
 
 
