@@ -149,7 +149,6 @@ class DataReader(object):
       sample += tmp_signal
     
     return sample
-    
 
 
   def thread_main(self, sess, n_threads=1, start=0):
@@ -259,6 +258,10 @@ class DataReader_valid(DataReader):
     self.enqueue = self.queue.enqueue(
         [self.sample_placeholder, self.target_placeholder, self.ratio_placeholder, self.signal_placeholder, self.noise_placeholder, self.fname_placeholder])
 
+  def dequeue(self, num_elements):
+    output = self.queue.dequeue_up_to(num_elements)
+    return output
+
   def thread_main(self, sess, n_threads=1, start=0, mode='valid'):
     if mode == 'valid':
       index = list(range(start, self.n_valid, n_threads))
@@ -266,16 +269,12 @@ class DataReader_valid(DataReader):
       index = list(range(start, self.n_test, n_threads))
     for i in index:
       if mode == 'valid':
-        data_signal = np.load(self.config.data_dir +
-                              self.valid_signal.iloc[i]['fname'])
-        data_noise = np.load(self.config.data_dir +
-                             self.valid_noise.sample(n=1,random_state=self.config.seed+i).iloc[0]['fname'])
+        data_signal = np.load(os.path.join(self.config.data_dir, self.valid_signal.iloc[i]['fname']))
+        data_noise = np.load(os.path.join(self.config.data_dir, self.valid_noise.sample(n=1,random_state=self.config.seed+i).iloc[0]['fname']))
         fname = self.valid_signal.iloc[i]['fname']
       elif mode == 'test':
-        data_signal = np.load(self.config.data_dir +
-                              self.test_signal.iloc[i]['fname'])
-        data_noise = np.load(self.config.data_dir +
-                             self.test_noise.sample(n=1, random_state=self.config.seed+i).iloc[0]['fname'])
+        data_signal = np.load(os.path.join(self.config.data_dir, self.test_signal.iloc[i]['fname']))
+        data_noise = np.load(os.path.join(self.config.data_dir, self.test_noise.sample(n=1, random_state=self.config.seed+i).iloc[0]['fname']))
         fname = self.test_signal.iloc[i]['fname']
 
       for j in [2]:
@@ -287,8 +286,7 @@ class DataReader_valid(DataReader):
           shift = -int(self.X_shape[1]*(1/4))
           if self.X_shape[1]+shift <= 1 or shift > 0:
             shift = 0
-          tmp_signal[:, -shift:] = data_signal['data'][:,
-                                                       self.X_shape[1]:2*self.X_shape[1]+shift, j]
+          tmp_signal[:, -shift:] = data_signal['data'][:, self.X_shape[1]:2*self.X_shape[1]+shift, j]
 
         if (np.isnan(tmp_signal).any() or np.isnan(tmp_noise).any()
                 or np.isinf(tmp_signal).any() or np.isinf(tmp_noise).any()):
@@ -300,15 +298,13 @@ class DataReader_valid(DataReader):
           np.random.seed(self.config.seed+i+tmp)
           ratio = 2
           tmp_noisy_signal = (ratio * tmp_noise + tmp_signal)
-          noisy_signal = np.stack(
-              [tmp_noisy_signal.real, tmp_noisy_signal.imag], axis=-1)
+          noisy_signal = np.stack([tmp_noisy_signal.real, tmp_noisy_signal.imag], axis=-1)
           std_noisy_signal = np.std(noisy_signal)
           noisy_signal = noisy_signal/std_noisy_signal
           tmp_mask = (np.abs(tmp_signal)) / (np.abs(tmp_noisy_signal) + 1e-4)
           tmp_mask[tmp_mask >= 1] = 1
           tmp_mask[tmp_mask <= 0] = 0
-          mask = np.zeros(
-              [tmp_mask.shape[0], tmp_mask.shape[1], self.n_class])
+          mask = np.zeros([tmp_mask.shape[0], tmp_mask.shape[1], self.n_class])
           mask[:, :, 0] = tmp_mask
           mask[:, :, 1] = 1-tmp_mask
           sess.run(self.enqueue, feed_dict={self.sample_placeholder: noisy_signal, 
@@ -318,16 +314,7 @@ class DataReader_valid(DataReader):
                                             self.noise_placeholder: ratio*tmp_noise,
                                             self.fname_placeholder: fname})
 
-  def start_threads(self, sess, n_threads=1, mode='valid'):
-    for i in range(n_threads):
-      thread = threading.Thread(
-          target=self.thread_main, args=(sess, n_threads, i, mode))
-      thread.daemon = True  # Thread will close when parent quits.
-      thread.start()
-      self.threads.append(thread)
-    return self.threads
-
-class DataReader_pred(object):
+class DataReader_pred(DataReader):
 
   def __init__(self,
                signal_dir,
@@ -337,7 +324,6 @@ class DataReader_pred(object):
                config=Config()):
     self.config = config
     signal_list = pd.read_csv(signal_list)
-
     self.signal = signal_list
     self.n_signal = len(self.signal)
     self.n_class = config.n_class
@@ -347,32 +333,31 @@ class DataReader_pred(object):
 
     self.coord = coord
     self.threads = []
+    self.queue_size = queue_size
+    self.add_placeholder()
+  
+  def add_placeholder(self):
     self.sample_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
     self.ratio_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
     self.fname_placeholder = tf.placeholder(dtype=tf.string, shape=None)
-    self.queue = tf.PaddingFIFOQueue(queue_size,
+    self.queue = tf.PaddingFIFOQueue(self.queue_size,
                                      ['float32', 'float32', 'string'],
                                      shapes=[self.config.X_shape, [], []])
-    self.enqueue = self.queue.enqueue(
-        [self.sample_placeholder, self.ratio_placeholder, self.fname_placeholder])
-
+    self.enqueue = self.queue.enqueue([self.sample_placeholder, self.ratio_placeholder, self.fname_placeholder])
 
   def dequeue(self, num_elements):
-    # output = self.queue.dequeue_many(num_elements)
     output = self.queue.dequeue_up_to(num_elements)
     return output
 
   def thread_main(self, sess, n_threads=1, start=0):
     index = list(range(start, self.n_signal, n_threads))
     for i in index:
-
-      data_signal = np.load(os.path.join(self.signal_dir,
-                            self.signal.iloc[i]['fname'].split('/')[-1]))
+      data_signal = np.load(os.path.join(self.signal_dir, self.signal.iloc[i]['fname']))
       fname = self.signal.iloc[i]['fname']
       if len(data_signal['data'].shape) == 1:
-        f, t, tmp_signal = scipy.signal.stft(scipy.signal.detrend(data_signal['data']), fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
+        f, t, tmp_signal = scipy.signal.stft(scipy.signal.detrend(data_signal['data'][:self.config.nt]), fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
       else:
-        f, t, tmp_signal = scipy.signal.stft(scipy.signal.detrend(data_signal['data'][..., -1]), fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
+        f, t, tmp_signal = scipy.signal.stft(scipy.signal.detrend(data_signal['data'][:self.config.nt, -1]), fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
       noisy_signal = np.stack([tmp_signal.real, tmp_signal.imag], axis=-1)
       if np.isnan(noisy_signal).any() or np.isinf(noisy_signal).any():
         continue
@@ -382,16 +367,6 @@ class DataReader_pred(object):
       sess.run(self.enqueue, feed_dict={self.sample_placeholder: noisy_signal, 
                                         self.ratio_placeholder: std_noisy_signal,
                                         self.fname_placeholder: fname})
-
-  def start_threads(self, sess, n_threads=1):
-    for i in range(n_threads):
-      thread = threading.Thread(
-          target=self.thread_main, args=(sess, n_threads, i))
-      thread.daemon = True  # Thread will close when parent quits.
-      thread.start()
-      self.threads.append(thread)
-    return self.threads
-
 
 if __name__ == "__main__":
   pass

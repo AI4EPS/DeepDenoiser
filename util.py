@@ -10,22 +10,23 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from mpl_toolkits.axes_grid1.inset_locator import mark_inset
 from data_reader import Config
 
-def istft_thread(i, npz_dir, logits, preds, X, epoch=0, fname=None):
+def istft_thread(i, npz_dir, preds, X, fname):
   config = Config()
 
-  t1, origin = scipy.signal.istft((X[i, :, :, 0]+X[i, :, :, 1]*1j), fs=config.fs,
+  t1, noisy_signal = scipy.signal.istft((X[i, :, :, 0]+X[i, :, :, 1]*1j), fs=config.fs,
                                   nperseg=config.nperseg, nfft=config.nfft, boundary='zeros')
-  t1, denoised = scipy.signal.istft((X[i, :, :, 0]+X[i, :, :, 1]*1j)*preds[i, :, :, 0],
+  t1, denoised_signal = scipy.signal.istft((X[i, :, :, 0]+X[i, :, :, 1]*1j)*preds[i, :, :, 0],
                                     fs=config.fs, nperseg=config.nperseg, nfft=config.nfft, boundary='zeros')
-  t1, noise = scipy.signal.istft((X[i, :, :, 0]+X[i, :, :, 1]*1j)*preds[i, :, :, 1],
+  t1, denoised_noise = scipy.signal.istft((X[i, :, :, 0]+X[i, :, :, 1]*1j)*preds[i, :, :, 1],
                                     fs=config.fs, nperseg=config.nperseg, nfft=config.nfft, boundary='zeros')
 
-  if fname is None:
-    np.savez(os.path.join(npz_dir, "epoch%03d_%03d.npz" % (epoch, i)), origin=origin, denoised=denoised, noise=noise, t=t1)
-  else:
-    np.savez(os.path.join(npz_dir, fname[i].decode()), origin=origin, denoised=denoised, noise=noise, t=t1)
 
-  return 0
+  np.savez(os.path.join(npz_dir, fname[i].decode()), 
+                        noisy_signal=noisy_signal, 
+                        denoised_signal=denoised_signal, 
+                        denoised_noise=denoised_noise, t=t1)
+
+  return t1, noisy_signal, denoised_signal, denoised_noise
 
 def plot_result(epoch, num, fig_dir, logits, preds, X, Y):
   config = Config()
@@ -92,8 +93,9 @@ def plot_pred(epoch, num, fig_dir, logits, preds, X):
     # plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d.pdf" % (epoch, i)), bbox_inches='tight')
 
 
-def plot_pred_thread(i, fig_dir, logits, preds, X, epoch=0, fname=None, data_dir=None):
+def plot_pred_thread(i, fig_dir, preds, X, fname):
   config = Config()
+
   t_FT = np.linspace(config.time_range[0], config.time_range[1], X.shape[2])
   f_FT = np.linspace(config.freq_range[0], config.freq_range[1], X.shape[1])
 
@@ -143,8 +145,7 @@ def plot_pred_thread(i, fig_dir, logits, preds, X, epoch=0, fname=None, data_dir
     plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_FT.png" % (epoch, i)), bbox_inches='tight')
     # plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_FT.pdf" % (epoch, i)), bbox_inches='tight')
   else:
-    plt.savefig(os.path.join(
-        fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_FT.png'), bbox_inches='tight')
+    plt.savefig(os.path.join(fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_FT.png'), bbox_inches='tight')
     # plt.savefig(os.path.join(
         # fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_FT.pdf'), bbox_inches='tight')
   plt.close(i)
@@ -219,8 +220,7 @@ def plot_pred_thread(i, fig_dir, logits, preds, X, epoch=0, fname=None, data_dir
     plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_wave.png" % (epoch, i)), bbox_inches='tight')
     # plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_wave.pdf" % (epoch, i)), bbox_inches='tight')
   else:
-    plt.savefig(os.path.join(
-        fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_wave.png'), bbox_inches='tight')
+    plt.savefig(os.path.join(fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_wave.png'), bbox_inches='tight')
     # plt.savefig(os.path.join(
         # fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_wave.pdf'), bbox_inches='tight')
 
@@ -228,15 +228,15 @@ def plot_pred_thread(i, fig_dir, logits, preds, X, epoch=0, fname=None, data_dir
   return 0
 
 
-def plot_thread(i, fig_dir, logits, preds, X, Y, signal_FT=None, noise_FT=None, epoch=0, fname=None, data_dir=None):
+def plot_thread(i, fig_dir, preds, X, fname, signal_FT=None, noise_FT=None, data_dir=None):
   config = Config()
+
   t_FT = np.linspace(config.time_range[0], config.time_range[1], X.shape[2])
   f_FT = np.linspace(config.freq_range[0], config.freq_range[1], X.shape[1])
 
   raw_data = None
-  if (data_dir is not None) and (fname is not None):
-    raw_data = np.load(os.path.join(
-        data_dir, fname[i].decode().split('/')[-1]))
+  if (data_dir is not None):
+    raw_data = np.load(os.path.join(data_dir, fname[i].decode().split('/')[-1]))
     itp = raw_data['itp']
     its = raw_data['its']
     ix1 = (750 - 50)/100
@@ -280,14 +280,8 @@ def plot_thread(i, fig_dir, logits, preds, X, Y, signal_FT=None, noise_FT=None, 
   plt.text(text_loc[0], text_loc[1], '(v)', horizontalalignment='center',
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
 
-  if fname is None:
-    plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_FT.png" % (epoch, i)), bbox_inches='tight')
-    # plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_FT.pdf" % (epoch, i)), bbox_inches='tight')
-  else:
-    plt.savefig(os.path.join(fig_dir, fname[i].decode().split(
-        '/')[-1].rstrip('.npz')+'_FT.png'), bbox_inches='tight')
-    # plt.savefig(os.path.join(fig_dir, fname[i].decode().split(
-        # '/')[-1].rstrip('.npz')+'_FT.pdf'), bbox_inches='tight')
+  plt.savefig(os.path.join(fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_FT.png'), bbox_inches='tight')
+  # plt.savefig(os.path.join(fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_FT.pdf'), bbox_inches='tight')
   plt.close(i)
 
   text_loc = [0.05, 0.8]
@@ -295,9 +289,18 @@ def plot_thread(i, fig_dir, logits, preds, X, Y, signal_FT=None, noise_FT=None, 
   fig_size = plt.gcf().get_size_inches()
   plt.gcf().set_size_inches(fig_size*[1, 2])
 
-  ax3 = plt.subplot(513)
   t1, noisy_signal = scipy.signal.istft(
       X[i, :, :, 0]+X[i, :, :, 1]*1j, fs=config.fs, nperseg=config.nperseg, nfft=config.nfft, boundary='zeros')
+  t1, denoised_signal = scipy.signal.istft(
+      (X[i, :, :, 0]+X[i, :, :, 1]*1j)*preds[i, :, :, 0], fs=config.fs, nperseg=config.nperseg, nfft=config.nfft, boundary='zeros')
+  t1, denoised_noise = scipy.signal.istft((X[i, :, :, 0]+X[i, :, :, 1]*1j)*(
+      1-preds[i, :, :, 0]), fs=config.fs, nperseg=config.nperseg, nfft=config.nfft, boundary='zeros')
+  t1, signal = scipy.signal.istft(
+      signal_FT[i, :, :], fs=config.fs, nperseg=config.nperseg, nfft=config.nfft, boundary='zeros')
+  t1, noise = scipy.signal.istft(
+      noise_FT[i, :, :], fs=config.fs, nperseg=config.nperseg, nfft=config.nfft, boundary='zeros')
+
+  ax3 = plt.subplot(513)
   plt.plot(t1, noisy_signal, 'k', linewidth=0.5, label='Noisy signal')
   plt.legend(loc='lower left', fontsize='medium')
   plt.xlim([np.around(t1[0]), np.around(t1[-1])])
@@ -311,8 +314,6 @@ def plot_thread(i, fig_dir, logits, preds, X, Y, signal_FT=None, noise_FT=None, 
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
 
   ax1 = plt.subplot(511)
-  t1, signal = scipy.signal.istft(
-      signal_FT[i, :, :], fs=config.fs, nperseg=config.nperseg, nfft=config.nfft, boundary='zeros')
   plt.plot(t1, signal, 'k', linewidth=0.5, label='Signal')
   plt.legend(loc='lower left', fontsize='medium')
   plt.xlim([np.around(t1[0]), np.around(t1[-1])])
@@ -322,8 +323,6 @@ def plot_thread(i, fig_dir, logits, preds, X, Y, signal_FT=None, noise_FT=None, 
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
 
   plt.subplot(512)
-  t1, noise = scipy.signal.istft(
-      noise_FT[i, :, :], fs=config.fs, nperseg=config.nperseg, nfft=config.nfft, boundary='zeros')
   plt.plot(t1, noise, 'k', linewidth=0.5, label='Noise')
   plt.legend(loc='lower left', fontsize='medium')
   plt.xlim([np.around(t1[0]), np.around(t1[-1])])
@@ -336,8 +335,6 @@ def plot_thread(i, fig_dir, logits, preds, X, Y, signal_FT=None, noise_FT=None, 
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
 
   ax4 = plt.subplot(514)
-  t1, denoised_signal = scipy.signal.istft(
-      (X[i, :, :, 0]+X[i, :, :, 1]*1j)*preds[i, :, :, 0], fs=config.fs, nperseg=config.nperseg, nfft=config.nfft, boundary='zeros')
   plt.plot(t1, denoised_signal, 'k', linewidth=0.5, label='Recovered signal')
   plt.legend(loc='lower left', fontsize='medium')
   plt.xlim([np.around(t1[0]), np.around(t1[-1])])
@@ -347,8 +344,6 @@ def plot_thread(i, fig_dir, logits, preds, X, Y, signal_FT=None, noise_FT=None, 
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
 
   plt.subplot(515)
-  t1, denoised_noise = scipy.signal.istft((X[i, :, :, 0]+X[i, :, :, 1]*1j)*(
-      1-preds[i, :, :, 0]), fs=config.fs, nperseg=config.nperseg, nfft=config.nfft, boundary='zeros')
   plt.plot(t1, denoised_noise, 'k', linewidth=0.5, label='Recovered noise')
   plt.legend(loc='lower left', fontsize='medium')
   plt.xlim([np.around(t1[0]), np.around(t1[-1])])
@@ -357,7 +352,7 @@ def plot_thread(i, fig_dir, logits, preds, X, Y, signal_FT=None, noise_FT=None, 
   plt.text(text_loc[0], text_loc[1], '(v)', horizontalalignment='center',
            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
 
-  if (data_dir is not None) and (fname is not None):
+  if (data_dir is not None):
     axins = inset_axes(ax1, width=2.0, height=1., loc='upper right',
                        bbox_to_anchor=(1, 0.5),
                        bbox_transform=ax1.transAxes)
@@ -393,14 +388,8 @@ def plot_thread(i, fig_dir, logits, preds, X, Y, signal_FT=None, noise_FT=None, 
     plt.yticks(visible=False)
     mark_inset(ax4, axins, loc1=1, loc2=3, fc="none", ec="0.5")
 
-  if fname is None:
-    plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_wave.png" % (epoch, i)), bbox_inches='tight')
-    # plt.savefig(os.path.join(fig_dir, "epoch%03d_%03d_wave.pdf" % (epoch, i)), bbox_inches='tight')
-  else:
-    plt.savefig(os.path.join(fig_dir, fname[i].decode().split(
-        '/')[-1].rstrip('.npz')+'_wave.png'), bbox_inches='tight')
-    # plt.savefig(os.path.join(fig_dir, fname[i].decode().split(
-        # '/')[-1].rstrip('.npz')+'_wave.pdf'), bbox_inches='tight')
+  plt.savefig(os.path.join(fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_wave.png'), bbox_inches='tight')
+  # plt.savefig(os.path.join(fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_wave.pdf'), bbox_inches='tight')
   plt.close(i)
 
 def plot_thread_nosignal(i, fig_dir, logits, preds, X, Y, signal_FT=None, noise_FT=None, epoch=0, fname=None, data_dir=None):
@@ -535,6 +524,114 @@ def plot_thread_nosignal(i, fig_dir, logits, preds, X, Y, signal_FT=None, noise_
         # '/')[-1].rstrip('.npz')+'_wave.pdf'), bbox_inches='tight')
   plt.close(i)
 
+def postprocessing_thread(i, preds, X, fname, fig_dir=None, npz_dir=None):
+  
+  config = Config()
+  
+  if (npz_dir is not None) or (fig_dir is not None):
+    
+    t1, noisy_signal = scipy.signal.istft((X[i, :, :, 0]+X[i, :, :, 1]*1j), fs=config.fs,
+                                    nperseg=config.nperseg, nfft=config.nfft, boundary='zeros')
+    t1, denoised_signal = scipy.signal.istft((X[i, :, :, 0]+X[i, :, :, 1]*1j)*preds[i, :, :, 0],
+                                      fs=config.fs, nperseg=config.nperseg, nfft=config.nfft, boundary='zeros')
+    t1, denoised_noise = scipy.signal.istft((X[i, :, :, 0]+X[i, :, :, 1]*1j)*preds[i, :, :, 1],
+                                      fs=config.fs, nperseg=config.nperseg, nfft=config.nfft, boundary='zeros')
+
+  if npz_dir is not None:
+    try:
+      np.savez(os.path.join(npz_dir, fname[i].decode()), 
+                            noisy_signal=noisy_signal, 
+                            denoised_signal=denoised_signal, 
+                            denoised_noise=denoised_noise, t=t1)
+    except FileNotFoundError:
+      os.makedirs(os.path.dirname(os.path.join(npz_dir, fname[i].decode())))
+      np.savez(os.path.join(npz_dir, fname[i].decode()), 
+                          noisy_signal=noisy_signal, 
+                          denoised_signal=denoised_signal, 
+                          denoised_noise=denoised_noise, t=t1)
+
+  if fig_dir is not None:
+
+    t_FT = np.linspace(config.time_range[0], config.time_range[1], X.shape[2])
+    f_FT = np.linspace(config.freq_range[0], config.freq_range[1], X.shape[1])
+
+    box = dict(boxstyle='round', facecolor='white', alpha=1)
+    text_loc = [0.05, 0.77]
+
+    plt.figure(i)
+    fig_size = plt.gcf().get_size_inches()
+    plt.gcf().set_size_inches(fig_size*[1, 1.2])
+    vmax = np.std(np.abs(X[i, :, :, 0]+X[i, :, :, 1]*1j)) * 1.8
+
+    plt.subplot(311)
+    plt.pcolormesh(t_FT, f_FT, np.abs(
+        X[i, :, :, 0]+X[i, :, :, 1]*1j), vmin=0, vmax=vmax, label='Noisy signal')
+    plt.gca().set_xticklabels([])
+    plt.text(text_loc[0], text_loc[1], '(i)', horizontalalignment='center',
+            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
+    plt.subplot(312)
+    plt.pcolormesh(t_FT, f_FT, np.abs(
+        X[i, :, :, 0]+X[i, :, :, 1]*1j)*preds[i, :, :, 0], vmin=0, vmax=vmax, label='Recovered signal')
+    plt.gca().set_xticklabels([])
+    plt.ylabel("Frequency (Hz)", fontsize='large')
+    plt.text(text_loc[0], text_loc[1], '(ii)', horizontalalignment='center',
+            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
+    plt.subplot(313)
+    plt.pcolormesh(t_FT, f_FT, np.abs(
+        X[i, :, :, 0]+X[i, :, :, 1]*1j)*preds[i, :, :, 1], vmin=0, vmax=vmax, label='Recovered noise')
+    plt.gca().set_xticklabels([])
+    plt.xlabel("Time (s)", fontsize='large')
+    plt.text(text_loc[0], text_loc[1], '(iii)', horizontalalignment='center',
+            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
+
+    try:
+      plt.savefig(os.path.join(fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_FT.png'), bbox_inches='tight')
+      # plt.savefig(os.path.join(fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_FT.pdf'), bbox_inches='tight')
+    except FileNotFoundError:
+      os.makedirs(os.path.dirname(os.path.join(fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_FT.png')))
+      plt.savefig(os.path.join(fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_FT.png'), bbox_inches='tight')
+      # plt.savefig(os.path.join(fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_FT.pdf'), bbox_inches='tight')
+    plt.close(i)
+
+    plt.figure(i)
+    fig_size = plt.gcf().get_size_inches()
+    plt.gcf().set_size_inches(fig_size*[1, 1.2])
+
+    ax4 = plt.subplot(311)
+    plt.plot(t1, noisy_signal, 'k', label='Noisy signal', linewidth=0.5)
+    plt.xlim([np.around(t1[0]), np.around(t1[-1])])
+    signal_ylim = [-np.max(np.abs(noisy_signal[100:-100])),
+                  np.max(np.abs(noisy_signal[100:-100]))]
+    plt.ylim(signal_ylim)
+    plt.gca().set_xticklabels([])
+    plt.legend(loc='lower left', fontsize='medium')
+    plt.text(text_loc[0], text_loc[1], '(i)', horizontalalignment='center',
+            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
+
+    ax5 = plt.subplot(312)
+    plt.plot(t1, denoised_signal, 'k', label='Recovered signal', linewidth=0.5)
+    plt.xlim([np.around(t1[0]), np.around(t1[-1])])
+    plt.ylim(signal_ylim)
+    plt.gca().set_xticklabels([])
+    plt.ylabel("Amplitude",  fontsize='large')
+    plt.legend(loc='lower left', fontsize='medium')
+    plt.text(text_loc[0], text_loc[1], '(ii)', horizontalalignment='center',
+            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
+
+    plt.subplot(313)
+    plt.plot(t1, denoised_noise, 'k', label='Recovered noise', linewidth=0.5)
+    plt.xlim([np.around(t1[0]), np.around(t1[-1])])
+    plt.ylim(signal_ylim)
+    plt.xlabel("Time (s)", fontsize='large')
+    plt.legend(loc='lower left', fontsize='medium')
+    plt.text(text_loc[0], text_loc[1], '(iii)', horizontalalignment='center',
+            transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
+
+    plt.savefig(os.path.join(fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_wave.png'), bbox_inches='tight')
+    # plt.savefig(os.path.join(fig_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_wave.pdf'), bbox_inches='tight')
+    plt.close(i)
+  
+  return
 
 if __name__ == "__main__":
     pass

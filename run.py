@@ -116,23 +116,37 @@ def read_flags():
                       default=None,
                       help="Checkpoint directory (default: None)")
 
-  parser.add_argument("--plot_number",
+  parser.add_argument("--num_plots",
                       default=10,
                       type=int,
                       help="plotting trainning result")
 
+  parser.add_argument("--input_length",
+                      default=None,
+                      type=int,
+                      help="input length")
+
+  parser.add_argument("--data_dir",
+                      default="../Dataset/NPZ_PS/",
+                      help="Input file directory")
+
+  parser.add_argument("--data_list",
+                      default="../Dataset/NPZ_PS/selected_channels_train.csv",
+                      help="Input csv file")
+
+  parser.add_argument("--output_dir",
+                      default=None,
+                      help="Output directory")
 
   parser.add_argument("--fpred",
                       default="preds.npz",
                       help="ouput file name of test data")
   parser.add_argument("--plot_pred",
-                      default=True,
-                      type=bool,
-                      help="if plot prediction results")
+                      action="store_true",
+                      help="If plot figure for test")
   parser.add_argument("--save_pred",
-                      default=True,
-                      type=bool,
-                      help="if save npz file of prediction")
+                      action="store_true",
+                      help="If save result for test")
 
   flags = parser.parse_args()
   return flags
@@ -227,7 +241,7 @@ def train_fn(flags, data_reader):
         flog.write("Epoch: {}, step: {}, loss: {}, mean loss: {}\n".format(epoch, step//flags.batch_size, loss_batch, mean_loss))
         flog.flush()
 
-      plot_result(epoch, flags.plot_number, fig_dir,
+      plot_result(epoch, flags.num_plots, fig_dir,
                    logits_batch, preds_batch,
                    X_batch, Y_batch)
       saver.save(sess, os.path.join(log_dir, "model.ckpt"))
@@ -314,13 +328,11 @@ def valid_fn(flags, data_reader, fig_dir=None, save_results=True):
       with multiprocessing.Pool(multiprocessing.cpu_count()*2) as pool:
         pool.map(partial(plot_thread, 
                          fig_dir=fig_dir,
-                         logits=logits_batch, 
                          preds=preds_batch, 
-                         X=X_batch*ratio_batch[:,np.newaxis,np.newaxis,np.newaxis], Y=Y_batch, 
+                         X=X_batch*ratio_batch[:,np.newaxis,np.newaxis,np.newaxis],
+                         fname=fname_batch,
                          signal_FT=signal_batch, 
-                         noise_FT=noise_batch, 
-                         epoch=step//flags.batch_size,
-                         fname=fname_batch), 
+                         noise_FT=noise_batch), 
                         #  fname=fname_batch, data_dir="../Dataset/NPZ_PS/HNE_HNN_HNZ"), 
                  range(len(X_batch)))
 
@@ -405,18 +417,18 @@ def debug_fn(flags, data_reader, fig_dir=None, save_results=True):
   return 0
 
 def pred_fn(flags, data_reader, fig_dir=None, npz_dir=None, log_dir=None):
-  current_time = time.strftime("%m%d%H%M%S")
+  current_time = time.strftime("%y%m%d-%H%M%S")
   if log_dir is None:
     log_dir = os.path.join(flags.logdir, "pred", current_time)
   logging.info("Pred log: %s" % log_dir)
   # logging.info("Dataset size: {}".format(data_reader.num_data))
   if not os.path.exists(log_dir):
     os.makedirs(log_dir)
-  if fig_dir is None:
+  if flags.plot_pred:
     fig_dir = os.path.join(log_dir, 'figure')
     os.makedirs(fig_dir, exist_ok=True)
-  if npz_dir is None:
-    npz_dir = os.path.join(log_dir, 'npz')
+  if flags.save_pred:
+    npz_dir = os.path.join(log_dir, 'data')
     os.makedirs(npz_dir, exist_ok=True)
 
   config = set_config(flags, data_reader)
@@ -441,8 +453,7 @@ def pred_fn(flags, data_reader, fig_dir=None, npz_dir=None, log_dir=None):
     latest_check_point = tf.train.latest_checkpoint(flags.ckdir)
     saver.restore(sess, latest_check_point)
 
-    threads = tf.train.start_queue_runners(
-        sess=sess, coord=data_reader.coord)
+    threads = tf.train.start_queue_runners(sess=sess, coord=data_reader.coord)
     data_reader.start_threads(sess, n_threads=20)
 
     preds = []
@@ -465,27 +476,21 @@ def pred_fn(flags, data_reader, fig_dir=None, npz_dir=None, log_dir=None):
       X.append(X_batch*ratio_batch[:,np.newaxis,np.newaxis,np.newaxis])
       fname.extend(fname_batch)
 
-      if flags.save_pred:
-        pool.map(partial(istft_thread, 
-                        npz_dir=npz_dir,
-                        logits=logits_batch, 
-                        preds=preds_batch, 
-                        X=X_batch*ratio_batch[:,np.newaxis,np.newaxis,np.newaxis],
-                        # epoch=step//flags.batch_size,
-                        fname=fname_batch), 
-                      #  fname=fname_batch, data_dir="../Dataset/Demo/HNE_HNN_HNZ"), 
-                  range(len(X_batch)))
+      pool.map(partial(postprocessing_thread,
+                       preds = preds_batch, 
+                       X = X_batch*ratio_batch[:,np.newaxis,np.newaxis,np.newaxis],
+                       fname = fname_batch,
+                       fig_dir = fig_dir, 
+                       npz_dir = npz_dir), 
+               range(len(X_batch)))
 
-      if flags.plot_pred:
-        pool.map(partial(plot_pred_thread, 
-                        fig_dir=fig_dir,
-                        logits=logits_batch, 
-                        preds=preds_batch, 
-                        X=X_batch*ratio_batch[:,np.newaxis,np.newaxis,np.newaxis],
-                        # epoch=step//flags.batch_size,
-                        fname=fname_batch), 
-                      #  fname=fname_batch, data_dir="../Dataset/Demo/HNE_HNN_HNZ"), 
-                range(len(X_batch)))
+      # for i in range(len(X_batch)):
+      #   postprocessing_thread(i,
+      #             preds = preds_batch, 
+      #             X = X_batch*ratio_batch[:,np.newaxis,np.newaxis,np.newaxis],
+      #             fname = fname_batch,
+      #             fig_dir = fig_dir, 
+      #             npz_dir = npz_dir)
     
     pool.close()
     if flags.save_pred:
@@ -544,20 +549,18 @@ def main(flags):
   elif flags.mode == "pred":
     with tf.name_scope('create_inputs'):
       data_reader = DataReader_pred(
-          signal_dir="../DAS/NPZ",
-          signal_list="../DAS/fname.csv",
+          signal_dir="../Dataset/NPZ_PS/",
+          signal_list="../Dataset/NPZ_PS/selected_channels_valid.csv",
           queue_size=flags.batch_size*2,
           coord=coord)
-    pred_fn(flags, data_reader)
+    pred_fn(flags, data_reader, log_dir=flags.output_dir)
 
   else:
     print("mode should be: train, valid, test, debug or pred")
 
   coord.request_stop()
   coord.join()
-
-  return
-
+  return 0
 
 if __name__ == '__main__':
   flags = read_flags()
