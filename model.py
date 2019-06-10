@@ -39,7 +39,7 @@ def crop_only(net1, net2):
 
 
 class Model:
-  def __init__(self, config):
+  def __init__(self, config, input_batch=None, mode='train'):
     self.depths = config.depths
     self.filters_root = config.filters_root
     self.kernel_size = config.kernel_size
@@ -62,11 +62,18 @@ class Model:
     self.summary_train = []
     self.summary_valid = []
 
-    self.build()
+    self.build(input_batch, mode=mode)
 
-  def add_placeholders(self):
-    self.X = tf.placeholder(dtype=tf.float32, shape=[None, self.X_shape[0], self.X_shape[1], self.X_shape[2]], name='X')
-    self.Y = tf.placeholder(dtype=tf.float32, shape=[None, self.Y_shape[0], self.Y_shape[1], self.n_class], name='y')
+  def add_placeholders(self, input_batch=None, mode='train'):
+    if input_batch is None:
+      self.X = tf.placeholder(dtype=tf.float32, shape=[None, self.X_shape[0], self.X_shape[1], self.X_shape[2]], name='X')
+      self.Y = tf.placeholder(dtype=tf.float32, shape=[None, self.Y_shape[0], self.Y_shape[1], self.n_class], name='y')
+    else:
+      self.X = input_batch[0]
+      if mode in ["train", "valid", "test"]:
+        self.Y = input_batch[1]
+      self.input_batch = input_batch
+
     self.is_training = tf.placeholder(dtype=tf.bool, name="is_training")
     # self.keep_prob = tf.placeholder(dtype=tf.float32, name="keep_prob")
     self.drop_rate = tf.placeholder(dtype=tf.float32, name="drop_rate")
@@ -330,107 +337,61 @@ class Model:
     tmp = tf.summary.scalar("learning_rate", self.learning_rate_node)
     self.summary_train.append(tmp)
 
-  def add_metrics_op(self):
-    with tf.variable_scope("metrics"):
 
-      Y= tf.argmax(self.Y, -1)
-      confusion_matrix = tf.cast(tf.confusion_matrix(
-          tf.reshape(Y, [-1]), 
-          tf.reshape(self.preds, [-1]), 
-          self.n_class, name='confusion_matrix'),
-          dtype=tf.float32)
+  def train_on_batch(self, sess, X_batch, Y_batch, summary_writer, drop_rate=0.0):
+    feed = {self.drop_rate: drop_rate,
+            self.is_training: True,
+            self.X: X_batch,
+            self.Y: Y_batch}
+    _, step_summary, step, loss = sess.run([self.train_op,
+                                            self.summary_train,
+                                            self.global_step,
+                                            self.loss],
+                                            feed_dict=feed)
+    summary_writer.add_summary(step_summary, step)
+    return loss
 
-      # with tf.variable_scope("P"):
-      c = tf.constant(1e-7, dtype=tf.float32)
-      precision_P =  (confusion_matrix[1,1] + c) / (tf.reduce_sum(confusion_matrix[:,1]) + c)
-      recall_P = (confusion_matrix[1,1] + c) / (tf.reduce_sum(confusion_matrix[1,:]) + c)
-      f1_P = 2 * precision_P * recall_P / (precision_P + recall_P)
+  def valid_on_batch(self, sess, X_batch, Y_batch, summary_writer, drop_rate=0.0):
+    feed = {self.drop_rate: drop_rate,
+            self.is_training: False,
+            self.X: X_batch,
+            self.Y: Y_batch}
+    step_summary, step, loss, preds = sess.run([self.summary_train,
+                                                self.global_step,
+                                                self.loss,
+                                                self.preds],
+                                                feed_dict=feed)
+    summary_writer.add_summary(step_summary, step)
+    return loss, preds
 
-      tmp1 = tf.summary.scalar("train_precision_p", precision_P)
-      tmp2 = tf.summary.scalar("train_recall_p", recall_P)
-      tmp3 = tf.summary.scalar("train_f1_p", f1_P)
-      self.summary_train.extend([tmp1, tmp2, tmp3])
-
-      tmp1 = tf.summary.scalar("valid_precision_p", precision_P)
-      tmp2 = tf.summary.scalar("valid_recall_p", recall_P)
-      tmp3 = tf.summary.scalar("valid_f1_p", f1_P)
-      self.summary_valid.extend([tmp1, tmp2, tmp3])
-
-      # with tf.variable_scope("S"):
-      precision_S =  (confusion_matrix[2,2] + c) / (tf.reduce_sum(confusion_matrix[:,2]) + c)
-      recall_S = (confusion_matrix[2,2] + c) / (tf.reduce_sum(confusion_matrix[2,:]) + c)
-      f1_S = 2 * precision_S * recall_S / (precision_S + recall_S)
-
-      tmp1 = tf.summary.scalar("train_precision_s", precision_S)
-      tmp2 = tf.summary.scalar("train_recall_s", recall_S)
-      tmp3 = tf.summary.scalar("train_f1_s", f1_S)
-      self.summary_train.extend([tmp1, tmp2, tmp3])
-
-      tmp1 = tf.summary.scalar("valid_precision_s", precision_S)
-      tmp2 = tf.summary.scalar("valid_recall_s", recall_S)
-      tmp3 = tf.summary.scalar("valid_f1_s", f1_S)
-      self.summary_valid.extend([tmp1, tmp2, tmp3])
-      
-      self.precision = [precision_P, precision_S]
-      self.recall = [recall_P, recall_S]
-      self.f1 = [f1_P, f1_S]
-
-
-
-  def train_on_batch(self, sess, inputs_batch, labels_batch, summary_writer, drop_rate):
-    feed = {self.X: inputs_batch,
-        self.Y: labels_batch,
-        self.drop_rate: drop_rate,
-        self.is_training: True}
-    _, step_summary, step, loss, preds, logits = sess.run([self.train_op,
-                                 self.summary_train,
-                                 self.global_step,
-                                 self.loss,
-                                 self.preds,
-                                 self.logits],
-                                 feed_dict=feed)
+  def test_on_batch(self, sess, summary_writer):
+    feed = {self.drop_rate: 0,
+            self.is_training: False}
+    step_summary, step, loss, preds, X_batch, Y_batch, \
+      ratio_batch, signal_batch, noise_batch, fname_batch \
+        = sess.run([self.summary_valid,
+                    self.global_step,
+                    self.loss,
+                    self.preds,
+                    self.X,
+                    self.Y, 
+                    self.input_batch[2],
+                    self.input_batch[3],
+                    self.input_batch[4],
+                    self.input_batch[5]],
+                    feed_dict=feed)
     summary_writer.add_summary(step_summary, step)
 
-    return loss, preds, logits
+    return  loss, preds, X_batch, Y_batch, \
+      ratio_batch, signal_batch, noise_batch, fname_batch
 
-
-  def valid_on_batch(self, sess, inputs_batch, labels_batch, summary_writer):
-    feed = {self.X: inputs_batch,
-        self.Y: labels_batch,
-        self.drop_rate: 0,
-        self.is_training: False}
-    step_summary, step, loss, preds, logits = sess.run([self.summary_valid,
-                              self.global_step,
-                              self.loss,
-                              self.preds,
-                              self.logits],
-                              feed_dict=feed)
-
-
-    summary_writer.add_summary(step_summary, step)
-
-    return loss, preds, logits
-
-
-  def predict_on_batch(self, sess, inputs_batch):
-    feed = {self.X: inputs_batch,
-        self.drop_rate: 0,
-        self.is_training: False}
-    preds, logits = sess.run([self.preds,
-                  self.logits],
-                  feed_dict=feed)
-    # preds, logits, weights = sess.run([self.preds,
-    #                                    self.logits,
-    #                                    self.representation],
-    #                                    feed_dict=feed)
-    # summary_writer.add_summary(step_summary, step)
-    return preds, logits
-
-  def build(self):
-    self.add_placeholders()
+  def build(self, input_batch=None, mode='train'):
+    self.add_placeholders(input_batch, mode)
     self.add_prediction_op()
-    self.add_loss_op()
-    self.add_training_op()
-    # self.add_metrics_op()
-    self.summary_train = tf.summary.merge(self.summary_train)
-    self.summary_valid = tf.summary.merge(self.summary_valid)
+    if mode in ["train", "valid", "test"]:
+      self.add_loss_op()
+      self.add_training_op()
+      # self.add_metrics_op()
+      self.summary_train = tf.summary.merge(self.summary_train)
+      self.summary_valid = tf.summary.merge(self.summary_valid)
+    return 0
