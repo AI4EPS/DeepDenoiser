@@ -28,7 +28,10 @@ class Config():
   queue_size = 10
   noise_mean = 2
   noise_std = 1
+  # noise_low = 1
+  # noise_high = 5
   use_buffer = True
+  snr_threshold = 10
 
 class DataReader(object):
 
@@ -46,8 +49,8 @@ class DataReader(object):
     signal_list = pd.read_csv(signal_list, header=0)
     noise_list = pd.read_csv(noise_list, header=0)
     
-    self.signal = signal_list[signal_list['snr'] > 10].iloc[:300]
-    self.noise = noise_list
+    self.signal = signal_list[signal_list['snr'] > self.config.snr_threshold]
+    self.noise = noise_list[noise_list['snr'] > self.config.snr_threshold]
     self.n_signal = len(self.signal)
 
     self.signal_dir = signal_dir
@@ -68,50 +71,59 @@ class DataReader(object):
     self.buffer_channels_noise = {}
 
   def add_queue(self):
-    self.sample_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
-    self.target_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
-    self.queue = tf.PaddingFIFOQueue(self.queue_size,
-                                     ['float32', 'float32'],
-                                     shapes=[self.config.X_shape, self.config.Y_shape])
-    self.enqueue = self.queue.enqueue([self.sample_placeholder, self.target_placeholder])
+    with tf.device('/cpu:0'):
+      self.sample_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
+      self.target_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
+      self.queue = tf.PaddingFIFOQueue(self.queue_size,
+                                      ['float32', 'float32'],
+                                      shapes=[self.config.X_shape, self.config.Y_shape])
+      self.enqueue = self.queue.enqueue([self.sample_placeholder, self.target_placeholder])
     return 0
 
   def dequeue(self, num_elements):
     output = self.queue.dequeue_many(num_elements)
     return output
 
+  def get_snr(self, data, itp, dit=300):
+    tmp_std = np.std(data[itp-dit:itp])
+    if tmp_std > 0:
+      return np.std(data[itp:itp+dit])/tmp_std
+    else:
+      return 0
+
   def add_event(self, sample, channels, j):
-    while np.random.uniform(0, 1) < 0.5:
+    while np.random.uniform(0, 1) < 0.2:
       shift = None
       if channels not in self.buffer_channels_signal:
         self.buffer_channels_signal[channels] = self.signal[self.signal['channels']==channels]
       fname = os.path.join(self.signal_dir, self.buffer_channels_signal[channels].sample(n=1).iloc[0]['fname'])
-      # try:
-      if fname not in self.buffer_signal:
-        meta = np.load(fname)
-        data_FT = []
-        for i in range(3):
-          tmp_data = meta['data'][..., i]
-          tmp_data -= np.mean(tmp_data)
-          f, t, tmp_FT = scipy.signal.stft(tmp_data, fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
-          data_FT.append(tmp_FT)
-        data_FT = np.stack(data_FT, axis=-1)
-        self.buffer_signal[fname] = {'data_FT': data_FT, 'itp':meta['itp'], 'its':meta['its'], 'channels': meta['channels']}
-      meta_signal = self.buffer_signal[fname]
-      # except:
-      #   logging.error("Failed reading signal: {}".format(fname))
-      #   continue 
-
-      tmp_signal = np.zeros([self.X_shape[0], self.X_shape[1]], dtype=np.complex_)
-      shift = np.random.randint(-self.X_shape[1], 1, None, 'int')
-      tmp_signal[:, -shift:] = meta_signal['data_FT'][:, self.X_shape[1]:2*self.X_shape[1]+shift, j]
-      if np.isinf(tmp_signal).any() or np.isnan(tmp_signal).any() or (not np.any(tmp_signal)):
-        continue
-      tmp_signal = tmp_signal/np.std(tmp_signal)
-      sample += tmp_signal
-    
+      try:
+        if fname not in self.buffer_signal:
+          meta = np.load(fname)
+          data_FT = []
+          snr = []
+          for i in range(3):
+            tmp_data = meta['data'][:, i]
+            tmp_itp = meta['itp']
+            snr.append(self.get_snr(tmp_data, tmp_itp))
+            tmp_data -= np.mean(tmp_data)
+            f, t, tmp_FT = scipy.signal.stft(tmp_data, fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
+            data_FT.append(tmp_FT)
+          data_FT = np.stack(data_FT, axis=-1)
+          self.buffer_signal[fname] = {'data_FT': data_FT, 'itp': tmp_itp, 'channels': meta['channels'], 'snr': snr}
+        meta_signal = self.buffer_signal[fname]
+      except:
+        logging.error("Failed reading signal: {}".format(fname))
+        continue 
+      if meta_signal['snr'][j] > self.config.snr_threshold:
+        tmp_signal = np.zeros([self.X_shape[0], self.X_shape[1]], dtype=np.complex_)
+        shift = np.random.randint(-self.X_shape[1], 1, None, 'int')
+        tmp_signal[:, -shift:] = meta_signal['data_FT'][:, self.X_shape[1]:2*self.X_shape[1]+shift, j]
+        if np.isinf(tmp_signal).any() or np.isnan(tmp_signal).any() or (not np.any(tmp_signal)):
+          continue
+        tmp_signal = tmp_signal/np.std(tmp_signal)
+        sample += tmp_signal * (1 + np.random.randn()/2)
     return sample
-
 
   def thread_main(self, sess, n_threads=1, start=0):
     stop = False
@@ -120,80 +132,87 @@ class DataReader(object):
       np.random.shuffle(index)
       for i in index:
         fname_signal = os.path.join(self.signal_dir, self.signal.iloc[i]['fname'])
-        # try:
-        if fname_signal not in self.buffer_signal:
-          meta = np.load(fname_signal)
-          data_FT = []
-          for j in range(3):
-            tmp_data = meta['data'][..., j]
-            tmp_data -= np.mean(tmp_data)
-            f, t, tmp_FT = scipy.signal.stft(tmp_data, fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
-            data_FT.append(tmp_FT)
-          data_FT = np.stack(data_FT, axis=-1)
-          self.buffer_signal[fname_signal] = {'data_FT': data_FT, 'itp':meta['itp'], 'its':meta['its'], 'channels': meta['channels']}
-        meta_signal = self.buffer_signal[fname_signal]
-        # except:
-        #   logging.error("Failed reading signal: {}".format(fname_signal))
-        #   continue
-        channels = meta['channels'].tolist()
-        start_tp = meta['itp'].tolist()
+        try:
+          if fname_signal not in self.buffer_signal:
+            meta = np.load(fname_signal)
+            data_FT = []
+            snr = []
+            for j in range(3):
+              tmp_data = meta['data'][..., j]
+              tmp_itp = meta['itp']
+              snr.append(self.get_snr(tmp_data, tmp_itp))
+              tmp_data -= np.mean(tmp_data)
+              f, t, tmp_FT = scipy.signal.stft(tmp_data, fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
+              data_FT.append(tmp_FT)
+            data_FT = np.stack(data_FT, axis=-1)
+            self.buffer_signal[fname_signal] = {'data_FT': data_FT, 'itp':tmp_itp, 'channels': meta['channels'], 'snr': snr}
+          meta_signal = self.buffer_signal[fname_signal]
+        except:
+          logging.error("Failed reading signal: {}".format(fname_signal))
+          continue
+        channels = meta_signal['channels'].tolist()
+        start_tp = meta_signal['itp'].tolist()
 
         if channels not in self.buffer_channels_noise:
           self.buffer_channels_noise[channels] = self.noise[self.noise['channels']==channels]
         fname_noise = os.path.join(self.noise_dir, self.buffer_channels_noise[channels].sample(n=1).iloc[0]['fname'])
-        # try:
-        if fname_noise not in self.buffer_noise:
-          meta = np.load(fname_noise)
-          data_FT = []
-          for i in range(3):
-            tmp_data = meta['data'][:self.config.nt, i]
-            tmp_data -= np.mean(tmp_data)
-            f, t, tmp_FT = scipy.signal.stft(tmp_data, fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
-            data_FT.append(tmp_FT)
-          data_FT = np.stack(data_FT, axis=-1)
-          self.buffer_noise[fname_noise] = {'data_FT': data_FT, 'channels': meta['channels']}
-        meta_noise = self.buffer_noise[fname_noise]
-        # except:
-        #   logging.error("Failed reading noise: {}".format(fname_noise))
-        #   continue
+        try:
+          if fname_noise not in self.buffer_noise:
+            meta = np.load(fname_noise)
+            data_FT = []
+            for i in range(3):
+              tmp_data = meta['data'][:self.config.nt, i]
+              tmp_data -= np.mean(tmp_data)
+              f, t, tmp_FT = scipy.signal.stft(tmp_data, fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
+              data_FT.append(tmp_FT)
+            data_FT = np.stack(data_FT, axis=-1)
+            self.buffer_noise[fname_noise] = {'data_FT': data_FT, 'channels': meta['channels']}
+          meta_noise = self.buffer_noise[fname_noise]
+        except:
+          logging.error("Failed reading noise: {}".format(fname_noise))
+          continue
 
         if self.coord.should_stop():
           stop = True
           break
 
-        for j in np.random.permutation([0,1,2]):
-          tmp_noise = meta_noise['data_FT'][..., j]
-          if np.isinf(tmp_noise).any() or np.isnan(tmp_noise).any() or (not np.any(tmp_noise)):
-              continue
-          tmp_noise = tmp_noise/np.std(tmp_noise)
+        j = np.random.choice([0,1,2])
+        if meta_signal['snr'][j] <= self.config.snr_threshold:
+          continue
 
-          tmp_signal = np.zeros([self.X_shape[0], self.X_shape[1]], dtype=np.complex_)
-          if np.random.random() < 0.9:
-            shift = np.random.randint(-self.X_shape[1], 1, None, 'int')
-            tmp_signal[:, -shift:] = meta_signal['data_FT'][:, self.X_shape[1]:2*self.X_shape[1]+shift, j]
-            if np.isinf(tmp_signal).any() or np.isnan(tmp_signal).any() or (not np.any(tmp_signal)):
-              continue
-            tmp_signal = tmp_signal/np.std(tmp_signal)
-            tmp_signal = self.add_event(tmp_signal, channels, j)
-          
-            if np.random.random() < 0.2:
-              tmp_signal = np.fliplr(tmp_signal)
+        tmp_noise = meta_noise['data_FT'][..., j]
+        if np.isinf(tmp_noise).any() or np.isnan(tmp_noise).any() or (not np.any(tmp_noise)):
+            continue
+        tmp_noise = tmp_noise/np.std(tmp_noise)
 
-          ratio = 0
-          while ratio <= 0:
-            ratio = self.config.noise_mean + np.random.randn() * self.config.noise_std 
-          tmp_noisy_signal = (tmp_signal + ratio * tmp_noise)
-          noisy_signal = np.stack([tmp_noisy_signal.real, tmp_noisy_signal.imag], axis=-1)
-          noisy_signal = noisy_signal/np.std(noisy_signal)
-          # tmp_mask = (np.abs(tmp_signal)) / (np.abs(tmp_noisy_signal) + 1e-4)
-          tmp_mask = np.abs(tmp_signal)/(np.abs(tmp_signal) + np.abs(ratio * tmp_noise) + 1e-4)
-          tmp_mask[tmp_mask >= 1] = 1
-          tmp_mask[tmp_mask <= 0] = 0
-          mask = np.zeros([tmp_mask.shape[0], tmp_mask.shape[1], self.n_class])
-          mask[:, :, 0] = tmp_mask
-          mask[:, :, 1] = 1-tmp_mask
-          sess.run(self.enqueue, feed_dict={self.sample_placeholder: noisy_signal, 
-                                            self.target_placeholder: mask})
+        tmp_signal = np.zeros([self.X_shape[0], self.X_shape[1]], dtype=np.complex_)
+        if np.random.random() < 0.9:
+          shift = np.random.randint(-self.X_shape[1], 1, None, 'int')
+          tmp_signal[:, -shift:] = meta_signal['data_FT'][:, self.X_shape[1]:2*self.X_shape[1]+shift, j]
+          if np.isinf(tmp_signal).any() or np.isnan(tmp_signal).any() or (not np.any(tmp_signal)):
+            continue
+          tmp_signal = tmp_signal/np.std(tmp_signal)
+          tmp_signal = self.add_event(tmp_signal, channels, j)
+        
+          if np.random.random() < 0.2:
+            tmp_signal = np.fliplr(tmp_signal)
+
+        ratio = 0
+        while ratio <= 0:
+          ratio = (self.config.noise_mean + np.random.randn() * self.config.noise_std) 
+        # ratio = np.random.uniform(self.config.noise_low, self.config.noise_high)
+        tmp_noisy_signal = (tmp_signal + ratio * tmp_noise)
+        noisy_signal = np.stack([tmp_noisy_signal.real, tmp_noisy_signal.imag], axis=-1)
+        noisy_signal = noisy_signal/np.std(noisy_signal)
+        tmp_mask = (np.abs(tmp_signal)) / (np.abs(tmp_noisy_signal) + 1e-4)
+        # tmp_mask = np.abs(tmp_signal)/(np.abs(tmp_signal) + np.abs(ratio * tmp_noise) + 1e-4)
+        tmp_mask[tmp_mask >= 1] = 1
+        tmp_mask[tmp_mask <= 0] = 0
+        mask = np.zeros([tmp_mask.shape[0], tmp_mask.shape[1], self.n_class])
+        mask[:, :, 0] = tmp_mask
+        mask[:, :, 1] = 1-tmp_mask
+        sess.run(self.enqueue, feed_dict={self.sample_placeholder: noisy_signal, 
+                                          self.target_placeholder: mask})
 
   def start_threads(self, sess, n_threads=8):
     for i in range(n_threads):
@@ -215,11 +234,11 @@ class DataReader_test(DataReader):
                config=Config()):
     self.config = config
 
-    signal_list = pd.read_csv(signal_list, header=0).iloc[:93]
+    signal_list = pd.read_csv(signal_list, header=0)
     noise_list = pd.read_csv(noise_list, header=0)
-    self.signal = signal_list
+    self.signal = signal_list[signal_list['snr'] > self.config.snr_threshold]
+    self.noise = noise_list[noise_list['snr'] > self.config.snr_threshold]
     self.n_signal = len(self.signal)
-    self.noise = noise_list
     
     self.signal_dir = signal_dir
     self.noise_dir = noise_dir
@@ -250,6 +269,7 @@ class DataReader_test(DataReader):
                                      shapes=[self.config.X_shape, self.config.Y_shape, [], self.config.signal_shape, self.config.noise_shape, []])
     self.enqueue = self.queue.enqueue(
         [self.sample_placeholder, self.target_placeholder, self.ratio_placeholder, self.signal_placeholder, self.noise_placeholder, self.fname_placeholder])
+    return 0
 
   def dequeue(self, num_elements):
     output = self.queue.dequeue_up_to(num_elements)
@@ -259,85 +279,80 @@ class DataReader_test(DataReader):
     index = list(range(start, self.n_signal, n_threads))
     for i in index:
       np.random.seed(i)
+
       fname = self.signal.iloc[i]['fname']
-      fname_signal = os.path.join(self.signal_dir, self.signal.iloc[i]['fname'])
+      fname_signal = os.path.join(self.signal_dir, fname)
       meta = np.load(fname_signal)
       data_FT = []
+      snr = []
       for j in range(3):
         tmp_data = meta['data'][..., j]
+        tmp_itp = meta['itp']
+        snr.append(self.get_snr(tmp_data, tmp_itp))
         tmp_data -= np.mean(tmp_data)
         f, t, tmp_FT = scipy.signal.stft(tmp_data, fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
         data_FT.append(tmp_FT)
       data_FT = np.stack(data_FT, axis=-1)
-      self.buffer_signal[fname_signal] = {'data_FT': data_FT, 'itp':meta['itp'], 'its':meta['its'], 'channels': meta['channels']}
-      meta_signal = self.buffer_signal[fname_signal]
+      meta_signal = {'data_FT': data_FT, 'itp': tmp_itp, 'channels': meta['channels'], 'snr': snr}
       channels = meta['channels'].tolist()
       start_tp = meta['itp'].tolist()
 
       if channels not in self.buffer_channels_noise:
         self.buffer_channels_noise[channels] = self.noise[self.noise['channels']==channels]
       fname_noise = os.path.join(self.noise_dir, self.buffer_channels_noise[channels].sample(n=1, random_state=i).iloc[0]['fname'])
-
-      if fname_noise not in self.buffer_noise:
-        meta = np.load(fname_noise)
-        data_FT = []
-        for i in range(3):
-          tmp_data = meta['data'][:self.config.nt, i]
-          tmp_data -= np.mean(tmp_data)
-          f, t, tmp_FT = scipy.signal.stft(tmp_data, fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
-          data_FT.append(tmp_FT)
-        data_FT = np.stack(data_FT, axis=-1)
-        self.buffer_noise[fname_noise] = {'data_FT': data_FT, 'channels': meta['channels']}
-      meta_noise = self.buffer_noise[fname_noise]
+      meta = np.load(fname_noise)
+      data_FT = []
+      for i in range(3):
+        tmp_data = meta['data'][:self.config.nt, i]
+        tmp_data -= np.mean(tmp_data)
+        f, t, tmp_FT = scipy.signal.stft(tmp_data, fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
+        data_FT.append(tmp_FT)
+      data_FT = np.stack(data_FT, axis=-1)
+      meta_noise = {'data_FT': data_FT, 'channels': meta['channels']}
 
       if self.coord.should_stop():
         stop = True
         break
 
-      # for j in [0,1,2]:
-      for j in [2]:
-        tmp_noise = meta_noise['data_FT'][..., j]
-        if np.isinf(tmp_noise).any() or np.isnan(tmp_noise).any() or (not np.any(tmp_noise)):
-            continue
-        tmp_noise = tmp_noise/np.std(tmp_noise)
+      j = np.random.choice([0,1,2])
+      tmp_noise = meta_noise['data_FT'][..., j]
+      if np.isinf(tmp_noise).any() or np.isnan(tmp_noise).any() or (not np.any(tmp_noise)):
+          continue
+      tmp_noise = tmp_noise/np.std(tmp_noise)
 
-        tmp_signal = np.zeros([self.X_shape[0], self.X_shape[1]], dtype=np.complex_)
-        # np.random.seed(i*3 + j)
-        if np.random.random() < 0.9:
-          # np.random.seed(i*4 + j)
-          shift = np.random.randint(-self.X_shape[1], 1, None, 'int')
-          tmp_signal[:, -shift:] = meta_signal['data_FT'][:, self.X_shape[1]:2*self.X_shape[1]+shift, j]
-          if np.isinf(tmp_signal).any() or np.isnan(tmp_signal).any() or (not np.any(tmp_signal)):
-            continue
-          tmp_signal = tmp_signal/np.std(tmp_signal)
-          
-          # tmp_signal = self.add_event(tmp_signal, channels, j)
+      tmp_signal = np.zeros([self.X_shape[0], self.X_shape[1]], dtype=np.complex_)
+      if np.random.random() < 0.9:
+        shift = np.random.randint(-self.X_shape[1], 1, None, 'int')
+        tmp_signal[:, -shift:] = meta_signal['data_FT'][:, self.X_shape[1]:2*self.X_shape[1]+shift, j]
+        if np.isinf(tmp_signal).any() or np.isnan(tmp_signal).any() or (not np.any(tmp_signal)):
+          continue
+        tmp_signal = tmp_signal/np.std(tmp_signal)
         
-          # if np.random.random() < 0.2:
-          #   tmp_signal = np.fliplr(tmp_signal)
+        # tmp_signal = self.add_event(tmp_signal, channels, j)
+        # if np.random.random() < 0.2:
+        #   tmp_signal = np.fliplr(tmp_signal)
 
-        ratio = 0
-        # np.random.seed(i*5 + j)
-        while ratio <= 0:
-          ratio = self.config.noise_mean + np.random.randn() * self.config.noise_std 
-        tmp_noisy_signal = (tmp_signal + ratio*tmp_noise)
-        noisy_signal = np.stack([tmp_noisy_signal.real, tmp_noisy_signal.imag], axis=-1)
-        std_noisy_signal = np.std(noisy_signal)
-        noisy_signal = noisy_signal/std_noisy_signal
-        # tmp_mask = (np.abs(tmp_signal)) / (np.abs(tmp_noisy_signal) + 1e-4)
-        tmp_mask = np.abs(tmp_signal)/(np.abs(tmp_signal) + np.abs(ratio * tmp_noise) + 1e-4)
-        tmp_mask[tmp_mask >= 1] = 1
-        tmp_mask[tmp_mask <= 0] = 0
-        mask = np.zeros([tmp_mask.shape[0], tmp_mask.shape[1], self.n_class])
-        mask[:, :, 0] = tmp_mask
-        mask[:, :, 1] = 1-tmp_mask
+      ratio = 0
+      while ratio <= 0:
+        ratio = self.config.noise_mean + np.random.randn() * self.config.noise_std 
+      tmp_noisy_signal = (tmp_signal + ratio*tmp_noise)
+      noisy_signal = np.stack([tmp_noisy_signal.real, tmp_noisy_signal.imag], axis=-1)
+      std_noisy_signal = np.std(noisy_signal)
+      noisy_signal = noisy_signal/std_noisy_signal
+      tmp_mask = (np.abs(tmp_signal)) / (np.abs(tmp_noisy_signal) + 1e-4)
+      # tmp_mask = np.abs(tmp_signal)/(np.abs(tmp_signal) + np.abs(ratio * tmp_noise) + 1e-4)
+      tmp_mask[tmp_mask >= 1] = 1
+      tmp_mask[tmp_mask <= 0] = 0
+      mask = np.zeros([tmp_mask.shape[0], tmp_mask.shape[1], self.n_class])
+      mask[:, :, 0] = tmp_mask
+      mask[:, :, 1] = 1-tmp_mask
 
-        sess.run(self.enqueue, feed_dict={self.sample_placeholder: noisy_signal, 
-                                          self.target_placeholder: mask, 
-                                          self.ratio_placeholder: std_noisy_signal,
-                                          self.signal_placeholder: tmp_signal, 
-                                          self.noise_placeholder: ratio*tmp_noise,
-                                          self.fname_placeholder: fname})
+      sess.run(self.enqueue, feed_dict={self.sample_placeholder: noisy_signal, 
+                                        self.target_placeholder: mask, 
+                                        self.ratio_placeholder: std_noisy_signal,
+                                        self.signal_placeholder: tmp_signal, 
+                                        self.noise_placeholder: ratio*tmp_noise,
+                                        self.fname_placeholder: fname})
 
 class DataReader_pred(DataReader):
 
@@ -377,8 +392,8 @@ class DataReader_pred(DataReader):
   def thread_main(self, sess, n_threads=1, start=0):
     index = list(range(start, self.n_signal, n_threads))
     for i in index:
-      data_signal = np.load(os.path.join(self.signal_dir, self.signal.iloc[i]['fname']))
       fname = self.signal.iloc[i]['fname']
+      data_signal = np.load(os.path.join(self.signal_dir, fname))
       if len(data_signal['data'].shape) == 1:
         f, t, tmp_signal = scipy.signal.stft(scipy.signal.detrend(data_signal['data'][:self.config.nt]), fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
       else:

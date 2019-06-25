@@ -12,8 +12,8 @@ import multiprocessing
 from functools import partial
 
 
-def read_flags():
-  """Returns flags"""
+def read_args():
+  """Returns args"""
 
   parser = argparse.ArgumentParser()
 
@@ -42,7 +42,7 @@ def read_flags():
                       help="decay step")
 
   parser.add_argument("--decay_rate",
-                      default=1,
+                      default=0.9,
                       type=float,
                       help="decay rate")
 
@@ -108,11 +108,11 @@ def read_flags():
                       type=float,
                       help="class weights")
 
-  parser.add_argument("--logdir",
+  parser.add_argument("--log_dir",
                       default="log",
                       help="Tensorboard log directory (default: log)")
 
-  parser.add_argument("--ckdir",
+  parser.add_argument("--model_dir",
                       default=None,
                       help="Checkpoint directory (default: None)")
 
@@ -126,12 +126,37 @@ def read_flags():
                       type=int,
                       help="input length")
 
+  parser.add_argument("--train_signal_dir",
+                      default="../Dataset/NPZ_PS/",
+                      help="Input file directory")
+  parser.add_argument("--train_signal_list",
+                      default="../Dataset/NPZ_PS/selected_three_channels_train.csv",
+                      help="Input csv file")
+  parser.add_argument("--train_noise_dir",
+                      default="../Dataset/NPZ_PS/",
+                      help="Input file directory")
+  parser.add_argument("--train_noise_list",
+                      default="../Dataset/NPZ_PS/selected_three_channels_train.csv",
+                      help="Input csv file")
+
+  parser.add_argument("--valid_signal_dir",
+                      default="../Dataset/NPZ_PS/",
+                      help="Input file directory")
+  parser.add_argument("--valid_signal_list",
+                      default="../Dataset/NPZ_PS/selected_three_channels_valid.csv",
+                      help="Input csv file")
+  parser.add_argument("--valid_noise_dir",
+                      default="../Dataset/NPZ_PS/",
+                      help="Input file directory")
+  parser.add_argument("--valid_noise_list",
+                      default="../Dataset/NPZ_PS/selected_three_channels_valid.csv",
+                      help="Input csv file")
+
   parser.add_argument("--data_dir",
                       default="../Dataset/NPZ_PS/",
                       help="Input file directory")
-
   parser.add_argument("--data_list",
-                      default="../Dataset/NPZ_PS/selected_channels_train.csv",
+                      default="../Dataset/NPZ_PS/selected_three_channels_valid.csv",
                       help="Input csv file")
 
   parser.add_argument("--output_dir",
@@ -141,18 +166,18 @@ def read_flags():
   parser.add_argument("--fpred",
                       default="preds.npz",
                       help="ouput file name of test data")
-  parser.add_argument("--plot_pred",
+  parser.add_argument("--plot_figure",
                       action="store_true",
                       help="If plot figure for test")
-  parser.add_argument("--save_pred",
+  parser.add_argument("--save_result",
                       action="store_true",
                       help="If save result for test")
 
-  flags = parser.parse_args()
-  return flags
+  args = parser.parse_args()
+  return args
 
 
-def set_config(flags, data_reader):
+def set_config(args, data_reader):
   config = Config()
 
   config.X_shape = data_reader.X_shape
@@ -160,50 +185,50 @@ def set_config(flags, data_reader):
   config.Y_shape = data_reader.Y_shape
   config.n_class = config.Y_shape[-1]
 
-  config.depths = flags.depth
-  config.filters_root = flags.filters_root
-  config.kernel_size = flags.kernel_size
-  config.pool_size = flags.pool_size
-  config.dilation_rate = flags.dilation_rate
-  config.batch_size = flags.batch_size
-  config.class_weights = flags.class_weights
-  config.loss_type = flags.loss_type
-  config.weight_decay = flags.weight_decay
-  config.optimizer = flags.optimizer
+  config.depths = args.depth
+  config.filters_root = args.filters_root
+  config.kernel_size = args.kernel_size
+  config.pool_size = args.pool_size
+  config.dilation_rate = args.dilation_rate
+  config.batch_size = args.batch_size
+  config.class_weights = args.class_weights
+  config.loss_type = args.loss_type
+  config.weight_decay = args.weight_decay
+  config.optimizer = args.optimizer
 
-  config.learning_rate = flags.learning_rate
-  if (flags.decay_step == -1) and (flags.mode == 'train'):
-    config.decay_step = data_reader.n_signal // flags.batch_size
+  config.learning_rate = args.learning_rate
+  if (args.decay_step == -1) and (args.mode == 'train'):
+    config.decay_step = data_reader.n_signal // args.batch_size
   else:
-    config.decay_step = flags.decay_step
-  config.decay_rate = flags.decay_rate
-  config.momentum = flags.momentum
+    config.decay_step = args.decay_step
+  config.decay_rate = args.decay_rate
+  config.momentum = args.momentum
 
-  config.summary = flags.summary
-  config.drop_rate = flags.drop_rate
-  config.class_weights = flags.class_weights
+  config.summary = args.summary
+  config.drop_rate = args.drop_rate
+  config.class_weights = args.class_weights
 
   return config
 
 
-def train_fn(flags, data_reader, data_reader_valid=None):
+def train_fn(args, data_reader, data_reader_valid=None):
   current_time = time.strftime("%y%m%d-%H%M%S")
-  log_dir = os.path.join(flags.logdir, current_time)
+  log_dir = os.path.join(args.log_dir, current_time)
   logging.info("Training log: {}".format(log_dir))
   if not os.path.exists(log_dir):
     os.makedirs(log_dir)
-  fig_dir = os.path.join(log_dir, 'figure')
-  if not os.path.exists(fig_dir):
-    os.makedirs(fig_dir)
+  figure_dir = os.path.join(log_dir, 'figures')
+  if not os.path.exists(figure_dir):
+    os.makedirs(figure_dir)
 
-  config = set_config(flags, data_reader)
+  config = set_config(args, data_reader)
   with open(os.path.join(log_dir, 'config.log'), 'w') as fp:
     fp.write('\n'.join("%s: %s" % item for item in vars(config).items()))
 
   with tf.name_scope('Input_Batch'):
-    batch = data_reader.dequeue(flags.batch_size * 3) # 3: three channels
+    batch = data_reader.dequeue(args.batch_size)
     if data_reader_valid is not None:
-      batch_valid = data_reader_valid.dequeue(flags.batch_size)
+      batch_valid = data_reader_valid.dequeue(args.batch_size)
 
   model = Model(config)
   sess_config = tf.ConfigProto()
@@ -217,56 +242,56 @@ def train_fn(flags, data_reader, data_reader_valid=None):
     init = tf.global_variables_initializer()
     sess.run(init)
 
-    if flags.ckdir is not None:
+    if args.model_dir is not None:
       logging.info("restoring models...")
-      latest_check_point = tf.train.latest_checkpoint(flags.ckdir)
+      latest_check_point = tf.train.latest_checkpoint(args.model_dir)
       saver.restore(sess, latest_check_point)
 
-    threads = data_reader.start_threads(sess, n_threads=8)
+    threads = data_reader.start_threads(sess, n_threads=multiprocessing.cpu_count())
     if data_reader_valid is not None:
-      threads = data_reader_valid.start_threads(sess, n_threads=8)
+      threads = data_reader_valid.start_threads(sess, n_threads=multiprocessing.cpu_count())
     flog = open(os.path.join(log_dir, 'loss.log'), 'w')
 
     total_step = 0
     mean_loss = 0
-    pool = multiprocessing.Pool(multiprocessing.cpu_count())
-    for epoch in range(flags.epochs):
-      progressbar = tqdm(range(0, data_reader.n_signal, flags.batch_size), desc="{}: ".format(log_dir.split("/")[-1]))
+    pool = multiprocessing.Pool(2)
+    for epoch in range(args.epochs):
+      progressbar = tqdm(range(0, data_reader.n_signal, args.batch_size), desc="{}: ".format(log_dir.split("/")[-1]))
       for step in progressbar:
         X_batch, Y_batch = sess.run(batch)
-        loss_batch = model.train_on_batch(sess, X_batch, Y_batch, summary_writer, flags.drop_rate)
+        loss_batch = model.train_on_batch(sess, X_batch, Y_batch, summary_writer, args.drop_rate)
         if epoch < 1:
           mean_loss = loss_batch
         else:
           total_step += 1
           mean_loss += (loss_batch-mean_loss)/total_step
-        progressbar.set_description("{}: loss={:.6f}, mean loss={:.6f}".format(log_dir.split("/")[-1], loss_batch, mean_loss))
-        flog.write("Epoch: {}, step: {}, loss: {}, mean loss: {}\n".format(epoch, step//flags.batch_size, loss_batch, mean_loss))
+        progressbar.set_description("{}: epoch={}, loss={:.6f}, mean loss={:.6f}".format(log_dir.split("/")[-1], epoch, loss_batch, mean_loss))
+        flog.write("Epoch: {}, step: {}, loss: {}, mean loss: {}\n".format(epoch, step//args.batch_size, loss_batch, mean_loss))
         flog.flush()
-      saver.save(sess, os.path.join(log_dir, "model.ckpt"))
+      saver.save(sess, os.path.join(log_dir, "model_{}.ckpt".format(epoch)))
 
       ## valid
       if data_reader_valid is not None:
         mean_loss_valid = 0
         total_step_valid = 0
-        progressbar = tqdm(range(0, data_reader_valid.n_signal, flags.batch_size), desc="Valid: ")
+        progressbar = tqdm(range(0, data_reader_valid.n_signal, args.batch_size), desc="Valid: ")
         for step in progressbar:
           X_batch, Y_batch = sess.run(batch_valid)
-          loss_batch, preds_batch = model.valid_on_batch(sess, X_batch, Y_batch, summary_writer, flags.drop_rate)
+          loss_batch, preds_batch = model.valid_on_batch(sess, X_batch, Y_batch, summary_writer, args.drop_rate)
           total_step_valid += 1
           mean_loss_valid += (loss_batch-mean_loss_valid)/total_step_valid
           progressbar.set_description("Valid: loss={:.6f}, mean loss={:.6f}".format(loss_batch, mean_loss_valid))
-          flog.write("Valid: {}, step: {}, loss: {}, mean loss: {}\n".format(epoch, step//flags.batch_size, loss_batch, mean_loss_valid))
+          flog.write("Valid: {}, step: {}, loss: {}, mean loss: {}\n".format(epoch, step//args.batch_size, loss_batch, mean_loss_valid))
           flog.flush()
 
-        # plot_result(epoch, flags.num_plots, fig_dir,  preds_batch, X_batch, Y_batch)
+        # plot_result(epoch, args.num_plots, figure_dir,  preds_batch, X_batch, Y_batch)
         pool.map(partial(plot_result_thread, 
                          epoch = epoch,
                          preds = preds_batch,
                          X = X_batch,
                          Y = Y_batch,
-                         fig_dir = fig_dir),
-                range(flags.num_plots))
+                         figure_dir = figure_dir),
+                range(args.num_plots))
 
     flog.close()
     pool.close()
@@ -285,27 +310,27 @@ def train_fn(flags, data_reader, data_reader_valid=None):
   return 0
 
 
-def test_fn(flags, data_reader, fig_dir=None, result_dir=None):
+def test_fn(args, data_reader, figure_dir=None, result_dir=None):
   current_time = time.strftime("%y%m%d-%H%M%S")
-  log_dir = os.path.join(flags.logdir, flags.mode, current_time)
-  logging.info("{} log: {}".format(flags.mode, log_dir))
+  log_dir = os.path.join(args.log_dir, args.mode, current_time)
+  logging.info("{} log: {}".format(args.mode, log_dir))
   if not os.path.exists(log_dir):
     os.makedirs(log_dir)
-  if (flags.plot_pred == True) and (fig_dir is None):
-    fig_dir = os.path.join(log_dir, 'figures')
-    if not os.path.exists(fig_dir):
-      os.makedirs(fig_dir)
-  if (flags.save_pred == True) and (result_dir is None):
+  if (args.plot_figure == True) and (figure_dir is None):
+    figure_dir = os.path.join(log_dir, 'figures')
+    if not os.path.exists(figure_dir):
+      os.makedirs(figure_dir)
+  if (args.save_result == True) and (result_dir is None):
     result_dir = os.path.join(log_dir, 'results')
     if not os.path.exists(result_dir):
       os.makedirs(result_dir)
 
-  config = set_config(flags, data_reader)
+  config = set_config(args, data_reader)
   with open(os.path.join(log_dir, 'config.log'), 'w') as fp:
     fp.write('\n'.join("%s: %s" % item for item in vars(config).items()))
 
   with tf.name_scope('Input_Batch'):
-    batch = data_reader.dequeue(flags.batch_size)
+    batch = data_reader.dequeue(args.batch_size)
 
   model = Model(config, input_batch=batch, mode='test')
   sess_config = tf.ConfigProto()
@@ -320,29 +345,34 @@ def test_fn(flags, data_reader, fig_dir=None, result_dir=None):
     sess.run(init)
 
     logging.info("restoring models...")
-    latest_check_point = tf.train.latest_checkpoint(flags.ckdir)
+    latest_check_point = tf.train.latest_checkpoint(args.model_dir)
     saver.restore(sess, latest_check_point)
 
-    threads = data_reader.start_threads(sess, n_threads=8)
+    threads = data_reader.start_threads(sess, n_threads=multiprocessing.cpu_count())
 
     flog = open(os.path.join(log_dir, 'loss.log'), 'w')
     total_step = 0
     mean_loss = 0
-    progressbar = tqdm(range(0, data_reader.n_signal, flags.batch_size), desc=flags.mode)
-    pool = multiprocessing.Pool(multiprocessing.cpu_count()*5)
+    progressbar = tqdm(range(0, data_reader.n_signal, args.batch_size), desc=args.mode)
+    if args.plot_figure:                                                           
+      num_pool = multiprocessing.cpu_count()*2                                     
+    elif args.save_result:                                                         
+      num_pool = multiprocessing.cpu_count()                                       
+    else:                                                                          
+      num_pool = 2                                                                 
+    pool = multiprocessing.Pool(num_pool) 
     for step in progressbar:
 
-      if step + flags.batch_size >= data_reader.n_signal:
+      if step + args.batch_size >= data_reader.n_signal:
         for t in threads:
           t.join()
         sess.run(data_reader.queue.close())
       
-      # X_batch, Y_batch, ratio_batch, signal_batch, noise_batch, fname_batch = sess.run(batch)
       loss_batch, preds_batch, X_batch, Y_batch, ratio_batch, \
       signal_batch, noise_batch, fname_batch = model.test_on_batch(sess, summary_writer)
       total_step += 1
       mean_loss += (loss_batch-mean_loss)/total_step
-      progressbar.set_description("{}: loss={:.6f}, mean loss={:6f}".format(flags.mode, loss_batch, mean_loss))
+      progressbar.set_description("{}: loss={:.6f}, mean loss={:6f}".format(args.mode, loss_batch, mean_loss))
       flog.write("step: {}, loss: {}\n".format(step, loss_batch))
       flog.flush()
 
@@ -350,11 +380,10 @@ def test_fn(flags, data_reader, fig_dir=None, result_dir=None):
                       preds=preds_batch, 
                       X=X_batch*ratio_batch[:,np.newaxis,np.newaxis,np.newaxis],
                       fname=fname_batch,
-                      fig_dir=fig_dir,
+                      figure_dir=figure_dir,
                       result_dir=result_dir,
                       signal_FT=signal_batch, 
                       noise_FT=noise_batch), 
-                    #  fname=fname_batch, data_dir="../Dataset/NPZ_PS/HNE_HNN_HNZ"), 
                 range(len(X_batch)))
 
     flog.close()
@@ -362,118 +391,73 @@ def test_fn(flags, data_reader, fig_dir=None, result_dir=None):
 
   return 0
 
-
-def debug_fn(flags, data_reader, fig_dir=None, save_results=True):
-  current_time = time.strftime("%y%m%d-%H%M%S")
-  logging.info("Debug: %s" % current_time)
-  log_dir = os.path.join(flags.logdir, "debug", current_time)
-  if not os.path.exists(log_dir):
-    os.makedirs(log_dir)
-  if fig_dir is None:
-    fig_dir = log_dir
-
-  config = set_config(flags, data_reader)
-  with open(os.path.join(log_dir, 'config.log'), 'w') as fp:
-    fp.write('\n'.join("%s: %s" % item for item in vars(config).items()))
-
-  with tf.name_scope('Input_Batch'):
-    batch = data_reader.dequeue(flags.batch_size)
-
-  model = Model(config)
-  sess_config = tf.ConfigProto()
-  sess_config.gpu_options.allow_growth = True
-  sess_config.log_device_placement = False
-
-  with tf.Session(config=sess_config) as sess:
-
-    summary_writer = tf.summary.FileWriter(log_dir, sess.graph)
-    saver = tf.train.Saver(tf.global_variables(), max_to_keep=5)
-    init = tf.global_variables_initializer()
-    sess.run(init)
-
-    logging.info("restoring models...")
-    latest_check_point = tf.train.latest_checkpoint(flags.ckdir)
-    saver.restore(sess, latest_check_point)
-
-    threads = tf.train.start_queue_runners(
-        sess=sess, coord=data_reader.coord)
-    data_reader.start_threads(sess, n_threads=1)
-
-    flog = open(os.path.join(log_dir, 'loss.log'), 'w')
-    total_step = 0
-    mean_loss = 0
-    progressbar = tqdm(range(0, data_reader.n_valid-flags.batch_size+1, flags.batch_size), desc="Debug")
-    for step in progressbar:
-      X_batch, Y_batch = sess.run(batch)
-      loss_batch, preds_batch, logits_batch = model.valid_on_batch(
-                                              sess, X_batch, Y_batch, summary_writer)
-      total_step += 1
-      mean_loss += (loss_batch-mean_loss)/total_step
-      progressbar.set_description("Debug, loss={:.6f}, mean loss={:.6f}".format(loss_batch, mean_loss))
-
-      flog.write("step: {}, loss: {}\n".format(step, loss_batch))
-      flog.flush()
-    flog.close()
-
-  return 0
-
-def pred_fn(flags, data_reader, fig_dir=None, result_dir=None, log_dir=None):
+def pred_fn(args, data_reader, figure_dir=None, result_dir=None, log_dir=None):
   current_time = time.strftime("%y%m%d-%H%M%S")
   if log_dir is None:
-    log_dir = os.path.join(flags.logdir, "pred", current_time)
+    log_dir = os.path.join(args.log_dir, "pred", current_time)
   logging.info("Pred log: %s" % log_dir)
   # logging.info("Dataset size: {}".format(data_reader.num_data))
   if not os.path.exists(log_dir):
     os.makedirs(log_dir)
-  if flags.plot_pred:
-    fig_dir = os.path.join(log_dir, 'figure')
-    os.makedirs(fig_dir, exist_ok=True)
-  if flags.save_pred:
-    result_dir = os.path.join(log_dir, 'data')
+  if args.plot_figure:
+    figure_dir = os.path.join(log_dir, 'figures')
+    os.makedirs(figure_dir, exist_ok=True)
+  if args.save_result:
+    result_dir = os.path.join(log_dir, 'results')
     os.makedirs(result_dir, exist_ok=True)
 
-  config = set_config(flags, data_reader)
+  config = set_config(args, data_reader)
   with open(os.path.join(log_dir, 'config.log'), 'w') as fp:
     fp.write('\n'.join("%s: %s" % item for item in vars(config).items()))
 
   with tf.name_scope('Input_Batch'):
-    batch = data_reader.dequeue(flags.batch_size)
+    batch = data_reader.dequeue(args.batch_size)
 
-  model = Model(config)
+  model = Model(config, input_batch=batch, mode='pred')
   sess_config = tf.ConfigProto()
   sess_config.gpu_options.allow_growth = True
   sess_config.log_device_placement = False
 
   with tf.Session(config=sess_config) as sess:
 
-    saver = tf.train.Saver(tf.global_variables(), max_to_keep=5)
+    saver = tf.train.Saver(tf.global_variables())
     init = tf.global_variables_initializer()
     sess.run(init)
 
     logging.info("restoring models...")
-    latest_check_point = tf.train.latest_checkpoint(flags.ckdir)
+    latest_check_point = tf.train.latest_checkpoint(args.model_dir)
     saver.restore(sess, latest_check_point)
 
     threads = tf.train.start_queue_runners(sess=sess, coord=data_reader.coord)
-    data_reader.start_threads(sess, n_threads=8)
+    data_reader.start_threads(sess, n_threads=multiprocessing.cpu_count())
 
     preds = []
     logits = []
     X = []
     fname = []
 
-    pool = multiprocessing.Pool(multiprocessing.cpu_count()*5)
-    for step in tqdm(range(0, data_reader.n_signal, flags.batch_size), desc="Pred"):
-      if step + flags.batch_size >= data_reader.n_signal:
+    if args.plot_figure:                                                           
+      num_pool = multiprocessing.cpu_count()*2                                     
+    elif args.save_result:                                                         
+      num_pool = multiprocessing.cpu_count()                                       
+    else:                                                                          
+      num_pool = 2                                                                 
+    pool = multiprocessing.Pool(num_pool) 
+    for step in tqdm(range(0, data_reader.n_signal, args.batch_size), desc="Pred"):
+      if step + args.batch_size >= data_reader.n_signal:
         for t in threads:
           t.join()
         sess.run(data_reader.queue.close())
 
-      X_batch, ratio_batch, fname_batch = sess.run(batch)
-      preds_batch, logits_batch = model.predict_on_batch(sess, X_batch)
+
+      preds_batch, X_batch, ratio_batch, fname_batch = sess.run([model.preds,
+                                                          batch[0],
+                                                          batch[1],
+                                                          batch[2]],
+                                                          feed_dict={model.drop_rate: 0,
+                                                                     model.is_training: False})
       
       preds.append(preds_batch)
-      logits.append(logits_batch)
       X.append(X_batch*ratio_batch[:,np.newaxis,np.newaxis,np.newaxis])
       fname.extend(fname_batch)
 
@@ -481,7 +465,7 @@ def pred_fn(flags, data_reader, fig_dir=None, result_dir=None, log_dir=None):
                        preds = preds_batch, 
                        X = X_batch*ratio_batch[:,np.newaxis,np.newaxis,np.newaxis],
                        fname = fname_batch,
-                       fig_dir = fig_dir, 
+                       figure_dir = figure_dir, 
                        result_dir = result_dir), 
                range(len(X_batch)))
 
@@ -490,76 +474,59 @@ def pred_fn(flags, data_reader, fig_dir=None, result_dir=None, log_dir=None):
       #             preds = preds_batch, 
       #             X = X_batch*ratio_batch[:,np.newaxis,np.newaxis,np.newaxis],
       #             fname = fname_batch,
-      #             fig_dir = fig_dir, 
+      #             figure_dir = figure_dir, 
       #             result_dir = result_dir)
     
     pool.close()
-    if flags.save_pred:
-      preds = np.vstack(preds)
-      logits = np.vstack(logits)
-      X = np.vstack(X)
-      np.savez(os.path.join(log_dir, flags.fpred), preds=preds, logits=logits, X=X, fname=fname)
 
   return 0
 
-def main(flags):
+def main(args):
 
   logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO)
 
   coord = tf.train.Coordinator()
 
-  if flags.mode == "train":
+  if args.mode == "train":
     with tf.name_scope('create_inputs'):
       data_reader = DataReader(
-          signal_dir="../Dataset/NPZ_PS/",
-          signal_list="../Dataset/NPZ_PS/selected_channels_valid.csv",
-          noise_dir="../Dataset/NPZ_PS/",
-          noise_list="../Dataset/NPZ_PS/selected_channels_valid.csv",
-          queue_size=flags.batch_size*2,
+          signal_dir=args.train_signal_dir,
+          signal_list=args.train_signal_list,
+          noise_dir=args.train_noise_dir,
+          noise_list=args.train_noise_list,
+          queue_size=args.batch_size*2,
           coord=coord)
       data_reader_valid = DataReader(
-          signal_dir="../Dataset/NPZ_PS/",
-          signal_list="../Dataset/NPZ_PS/selected_channels_valid.csv",
-          noise_dir="../Dataset/NPZ_PS/",
-          noise_list="../Dataset/NPZ_PS/selected_channels_valid.csv",
-          queue_size=flags.batch_size*2,
+          signal_dir=args.valid_signal_dir,
+          signal_list=args.valid_signal_list,
+          noise_dir=args.valid_noise_dir,
+          noise_list=args.valid_noise_list,
+          queue_size=args.batch_size*2,
           coord=coord)
     logging.info("Dataset size: training %d, validation %d" %  (data_reader.n_signal, data_reader_valid.n_signal))
-    train_fn(flags, data_reader, data_reader_valid)
+    train_fn(args, data_reader, data_reader_valid)
   
-  elif flags.mode == "valid" or flags.mode == "test":
+  elif args.mode == "valid" or args.mode == "test":
     with tf.name_scope('create_inputs'):
       data_reader = DataReader_test(
-          signal_dir="../Dataset/NPZ_PS/",
-          signal_list="../Dataset/NPZ_PS/selected_channels_valid.csv",
-          noise_dir="../Dataset/NPZ_PS/",
-          noise_list="../Dataset/NPZ_PS/selected_channels_valid.csv",
-          queue_size=flags.batch_size*2,
+          signal_dir=args.valid_signal_dir,
+          signal_list=args.valid_signal_list,
+          noise_dir=args.valid_noise_dir,
+          noise_list=args.valid_noise_list,
+          queue_size=args.batch_size*2,
           coord=coord)
     logging.info("Dataset Size: {}".format(data_reader.n_signal))
-    test_fn(flags, data_reader)
+    test_fn(args, data_reader)
 
-  elif flags.mode == "debug":
-    with tf.name_scope('create_inputs'):
-      data_reader = DataReader(
-          signal_dir="../Dataset/STFT/HNE_HNN_HNZ",
-          signal_list="../Dataset/STFT/HNE_HNN_HNZ.csv",
-          noise_dir="../Dataset/STFT_Noise/HNE_HNN_HNZ",
-          noise_list="../Dataset/STFT_Noise/HNE_HNN_HNZ.csv",
-          queue_size=flags.batch_size*2,
-          coord=coord)
-    logging.info("Dataset Size: training %d, validation %d, test %d" % 
-        (data_reader.n_signal, data_reader.n_valid, data_reader.n_test))
-    debug_fn(flags, data_reader)
-
-  elif flags.mode == "pred":
+  elif args.mode == "pred":
     with tf.name_scope('create_inputs'):
       data_reader = DataReader_pred(
-          signal_dir="../Dataset/NPZ_PS/",
-          signal_list="../Dataset/NPZ_PS/selected_channels_valid.csv",
-          queue_size=flags.batch_size*2,
+          signal_dir=args.data_dir,
+          signal_list=args.data_list,
+          queue_size=args.batch_size*2,
           coord=coord)
-    pred_fn(flags, data_reader, log_dir=flags.output_dir)
+    logging.info("Dataset Size: {}".format(data_reader.n_signal))
+    pred_fn(args, data_reader, log_dir=args.output_dir)
 
   else:
     print("mode should be: train, valid, test, debug or pred")
@@ -569,5 +536,5 @@ def main(flags):
   return 0
 
 if __name__ == '__main__':
-  flags = read_flags()
-  main(flags)
+  args = read_args()
+  main(args)

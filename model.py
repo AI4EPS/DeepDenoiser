@@ -356,7 +356,7 @@ class Model:
             self.is_training: False,
             self.X: X_batch,
             self.Y: Y_batch}
-    step_summary, step, loss, preds = sess.run([self.summary_train,
+    step_summary, step, loss, preds = sess.run([self.summary_valid,
                                                 self.global_step,
                                                 self.loss,
                                                 self.preds],
