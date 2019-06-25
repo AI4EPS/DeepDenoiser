@@ -391,13 +391,14 @@ class DataReader_pred(DataReader):
 
   def thread_main(self, sess, n_threads=1, start=0):
     index = list(range(start, self.n_signal, n_threads))
+    shift = 2500
     for i in index:
       fname = self.signal.iloc[i]['fname']
       data_signal = np.load(os.path.join(self.signal_dir, fname))
       if len(data_signal['data'].shape) == 1:
-        f, t, tmp_signal = scipy.signal.stft(scipy.signal.detrend(data_signal['data'][:self.config.nt]), fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
+        f, t, tmp_signal = scipy.signal.stft(scipy.signal.detrend(data_signal['data'][shift:self.config.nt+shift]), fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
       else:
-        f, t, tmp_signal = scipy.signal.stft(scipy.signal.detrend(data_signal['data'][:self.config.nt, -1]), fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
+        f, t, tmp_signal = scipy.signal.stft(scipy.signal.detrend(data_signal['data'][shift:self.config.nt+shift, -1]), fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
       noisy_signal = np.stack([tmp_signal.real, tmp_signal.imag], axis=-1)
       if np.isnan(noisy_signal).any() or np.isinf(noisy_signal).any():
         continue

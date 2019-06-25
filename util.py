@@ -866,7 +866,7 @@ def postprocessing_pred(i, preds, X, fname, figure_dir=None, result_dir=None):
       plt.savefig(os.path.join(figure_dir, fname[i].decode().rstrip('.npz')+'_FT.png'), bbox_inches='tight')
       # plt.savefig(os.path.join(figure_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_FT.pdf'), bbox_inches='tight')
     except FileNotFoundError:
-      os.makedirs(os.path.dirname(os.path.join(figure_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_FT.png')))
+      os.makedirs(os.path.dirname(os.path.join(figure_dir, fname[i].decode().rstrip('.npz')+'_FT.png')), exist_ok=True)
       plt.savefig(os.path.join(figure_dir, fname[i].decode().rstrip('.npz')+'_FT.png'), bbox_inches='tight')
       # plt.savefig(os.path.join(figure_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_FT.pdf'), bbox_inches='tight')
     plt.close(i)
