@@ -109,7 +109,7 @@ def plot_result_thread(i, epoch, preds, X, Y, figure_dir, mode="valid"):
   plt.title("Noisy signal")
   plt.gca().set_xticklabels([])
   plt.subplot(4, 2, 2)
-  plt.plot(t, noisy_signal, label='Noisy signal', linewidth=0.1)
+  plt.plot(t, noisy_signal, 'k', label='Noisy signal', linewidth=0.5)
   signal_ylim = plt.gca().get_ylim()
   plt.gca().set_xticklabels([])
   plt.legend(loc='lower left')
@@ -134,13 +134,13 @@ def plot_result_thread(i, epoch, preds, X, Y, figure_dir, mode="valid"):
   plt.gca().set_xticklabels([])
 
   plt.subplot(4, 2, 7)
-  plt.plot(t, ideal_denoised_signal, label='Ideal denoised signal', linewidth=0.1)
+  plt.plot(t, ideal_denoised_signal,  'k', label='Ideal denoised signal', linewidth=0.5)
   plt.ylim(signal_ylim)
   plt.xlabel("Time (s)")
   plt.legend(loc='lower left')
   plt.margins(x=0)
   plt.subplot(4, 2, 8)
-  plt.plot(t, denoised_signal, label='Denoised signal', linewidth=0.1)
+  plt.plot(t, denoised_signal, 'k', label='Denoised signal', linewidth=0.5)
   plt.ylim(signal_ylim)
   plt.xlabel("Time (s)")
   plt.legend(loc='lower left')
@@ -635,15 +635,15 @@ def postprocessing_test(i, preds, X, fname, figure_dir=None, result_dir=None, si
   if result_dir is not None:
     try:
       np.savez(os.path.join(result_dir, fname[i].decode()), 
-               preds=preds[i], X=X[i], singal_FT=signal_FT[i], noise_FT=noise_FT[i],
-               noisy_signal=noisy_signal[i], denoised_signal=denoised_signal[i], denoised_noise=denoised_noise[i],
-               signal = signal[i], noise =noise[i])
+               preds=preds[i], X=X[i], signal_FT=signal_FT[i], noise_FT=noise_FT[i],
+               noisy_signal=noisy_signal, denoised_signal=denoised_signal, denoised_noise=denoised_noise,
+               signal = signal, noise =noise)
     except FileNotFoundError:
       os.makedirs(os.path.dirname(os.path.join(result_dir, fname[i].decode())), exist_ok=True)
       np.savez(os.path.join(result_dir, fname[i].decode()), 
-                preds=preds[i], X=X[i], singal_FT=signal_FT[i], noise_FT=noise_FT[i],
-                noisy_signal=noisy_signal[i], denoised_signal=denoised_signal[i], denoised_noise=denoised_noise[i],
-                signal=signal[i], noise=noise[i])
+                preds=preds[i], X=X[i], signal_FT=signal_FT[i], noise_FT=noise_FT[i],
+                noisy_signal=noisy_signal, denoised_signal=denoised_signal, denoised_noise=denoised_noise,
+                signal=signal, noise=noise)
   
   if figure_dir is not None:
     t_FT = np.linspace(config.time_range[0], config.time_range[1], X.shape[2])
@@ -818,15 +818,15 @@ def postprocessing_pred(i, preds, X, fname, figure_dir=None, result_dir=None):
   if result_dir is not None:
     try:
       np.savez(os.path.join(result_dir, fname[i].decode()), 
-                            noisy_signal=noisy_signal[i], 
-                            denoised_signal=denoised_signal[i], 
-                            denoised_noise=denoised_noise[i], t=t1)
+                            noisy_signal=noisy_signal, 
+                            denoised_signal=denoised_signal, 
+                            denoised_noise=denoised_noise, t=t1)
     except FileNotFoundError:
       os.makedirs(os.path.dirname(os.path.join(result_dir, fname[i].decode())))
       np.savez(os.path.join(result_dir, fname[i].decode()), 
-                          noisy_signal=noisy_signal[i], 
-                          denoised_signal=denoised_signal[i], 
-                          denoised_noise=denoised_noise[i], t=t1)
+                          noisy_signal=noisy_signal, 
+                          denoised_signal=denoised_signal, 
+                          denoised_noise=denoised_noise, t=t1)
 
   if figure_dir is not None:
 
