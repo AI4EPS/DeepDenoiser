@@ -122,7 +122,7 @@ class DataReader(object):
         if np.isinf(tmp_signal).any() or np.isnan(tmp_signal).any() or (not np.any(tmp_signal)):
           continue
         tmp_signal = tmp_signal/np.std(tmp_signal)
-        sample += tmp_signal * (1 + np.random.randn()/2)
+        sample += tmp_signal / np.random.uniform(1, 5)
     return sample
 
   def thread_main(self, sess, n_threads=1, start=0):
