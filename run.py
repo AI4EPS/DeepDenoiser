@@ -27,7 +27,7 @@ def read_args():
                       help="Number of epochs (default: 10)")
 
   parser.add_argument("--batch_size",
-                      default=200,
+                      default=20,
                       type=int,
                       help="Batch size")
 
@@ -127,36 +127,36 @@ def read_args():
                       help="input length")
 
   parser.add_argument("--train_signal_dir",
-                      default="../Dataset/NPZ_PS/",
+                      default="./Dataset/train/",
                       help="Input file directory")
   parser.add_argument("--train_signal_list",
-                      default="../Dataset/NPZ_PS/selected_three_channels_train.csv",
+                      default="./Dataset/train.csv",
                       help="Input csv file")
   parser.add_argument("--train_noise_dir",
-                      default="../Dataset/NPZ_PS/",
+                      default="./Dataset/train/",
                       help="Input file directory")
   parser.add_argument("--train_noise_list",
-                      default="../Dataset/NPZ_PS/selected_three_channels_train.csv",
+                      default="./Dataset/train.csv",
                       help="Input csv file")
 
   parser.add_argument("--valid_signal_dir",
-                      default="../Dataset/NPZ_PS/",
+                      default="./Dataset/",
                       help="Input file directory")
   parser.add_argument("--valid_signal_list",
-                      default="../Dataset/NPZ_PS/selected_three_channels_valid.csv",
+                      default=None,
                       help="Input csv file")
   parser.add_argument("--valid_noise_dir",
-                      default="../Dataset/NPZ_PS/",
+                      default="./Dataset/",
                       help="Input file directory")
   parser.add_argument("--valid_noise_list",
-                      default="../Dataset/NPZ_PS/selected_three_channels_valid.csv",
+                      default=None,
                       help="Input csv file")
 
   parser.add_argument("--data_dir",
-                      default="../Dataset/NPZ_PS/",
+                      default="./Dataset/pred/",
                       help="Input file directory")
   parser.add_argument("--data_list",
-                      default="../Dataset/NPZ_PS/selected_three_channels_valid.csv",
+                      default="./Dataset/pred.csv",
                       help="Input csv file")
 
   parser.add_argument("--output_dir",
@@ -249,7 +249,7 @@ def train_fn(args, data_reader, data_reader_valid=None):
 
     threads = data_reader.start_threads(sess, n_threads=multiprocessing.cpu_count())
     if data_reader_valid is not None:
-      threads = data_reader_valid.start_threads(sess, n_threads=multiprocessing.cpu_count())
+      threads_valid = data_reader_valid.start_threads(sess, n_threads=multiprocessing.cpu_count())
     flog = open(os.path.join(log_dir, 'loss.log'), 'w')
 
     total_step = 0
@@ -267,7 +267,6 @@ def train_fn(args, data_reader, data_reader_valid=None):
           mean_loss += (loss_batch-mean_loss)/total_step
         progressbar.set_description("{}: epoch={}, loss={:.6f}, mean loss={:.6f}".format(log_dir.split("/")[-1], epoch, loss_batch, mean_loss))
         flog.write("Epoch: {}, step: {}, loss: {}, mean loss: {}\n".format(epoch, step//args.batch_size, loss_batch, mean_loss))
-        flog.flush()
       saver.save(sess, os.path.join(log_dir, "model_{}.ckpt".format(epoch)))
 
       ## valid
@@ -282,7 +281,6 @@ def train_fn(args, data_reader, data_reader_valid=None):
           mean_loss_valid += (loss_batch-mean_loss_valid)/total_step_valid
           progressbar.set_description("Valid: loss={:.6f}, mean loss={:.6f}".format(loss_batch, mean_loss_valid))
           flog.write("Valid: {}, step: {}, loss: {}, mean loss: {}\n".format(epoch, step//args.batch_size, loss_batch, mean_loss_valid))
-          flog.flush()
 
         # plot_result(epoch, args.num_plots, figure_dir,  preds_batch, X_batch, Y_batch)
         pool.map(partial(plot_result_thread, 
@@ -428,13 +426,7 @@ def pred_fn(args, data_reader, figure_dir=None, result_dir=None, log_dir=None):
     latest_check_point = tf.train.latest_checkpoint(args.model_dir)
     saver.restore(sess, latest_check_point)
 
-    threads = tf.train.start_queue_runners(sess=sess, coord=data_reader.coord)
-    data_reader.start_threads(sess, n_threads=multiprocessing.cpu_count())
-
-    preds = []
-    logits = []
-    X = []
-    fname = []
+    threads = data_reader.start_threads(sess, n_threads=multiprocessing.cpu_count())
 
     if args.plot_figure:                                                           
       num_pool = multiprocessing.cpu_count()*2                                     
@@ -449,17 +441,12 @@ def pred_fn(args, data_reader, figure_dir=None, result_dir=None, log_dir=None):
           t.join()
         sess.run(data_reader.queue.close())
 
-
       preds_batch, X_batch, ratio_batch, fname_batch = sess.run([model.preds,
                                                           batch[0],
                                                           batch[1],
                                                           batch[2]],
                                                           feed_dict={model.drop_rate: 0,
                                                                      model.is_training: False})
-      
-      preds.append(preds_batch)
-      X.append(X_batch*ratio_batch[:,np.newaxis,np.newaxis,np.newaxis])
-      fname.extend(fname_batch)
 
       pool.map(partial(postprocessing_pred,
                        preds = preds_batch, 
@@ -496,14 +483,18 @@ def main(args):
           noise_list=args.train_noise_list,
           queue_size=args.batch_size*2,
           coord=coord)
-      data_reader_valid = DataReader(
-          signal_dir=args.valid_signal_dir,
-          signal_list=args.valid_signal_list,
-          noise_dir=args.valid_noise_dir,
-          noise_list=args.valid_noise_list,
-          queue_size=args.batch_size*2,
-          coord=coord)
-    logging.info("Dataset size: training %d, validation %d" %  (data_reader.n_signal, data_reader_valid.n_signal))
+      if (args.valid_signal_list is not None) and (args.valid_noise_list is not None):
+        data_reader_valid = DataReader(
+            signal_dir=args.valid_signal_dir,
+            signal_list=args.valid_signal_list,
+            noise_dir=args.valid_noise_dir,
+            noise_list=args.valid_noise_list,
+            queue_size=args.batch_size*2,
+            coord=coord)
+        logging.info("Dataset size: training %d, validation %d" %  (data_reader.n_signal, data_reader_valid.n_signal))
+      else:
+        data_reader_valid = None
+      logging.info("Dataset size: training %d, validation 0" %  (data_reader.n_signal))
     train_fn(args, data_reader, data_reader_valid)
   
   elif args.mode == "valid" or args.mode == "test":

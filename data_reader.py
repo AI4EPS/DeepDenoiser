@@ -49,8 +49,8 @@ class DataReader(object):
     signal_list = pd.read_csv(signal_list, header=0)
     noise_list = pd.read_csv(noise_list, header=0)
     
-    self.signal = signal_list[signal_list['snr'] > self.config.snr_threshold]
-    self.noise = noise_list[noise_list['snr'] > self.config.snr_threshold]
+    self.signal = signal_list
+    self.noise = noise_list
     self.n_signal = len(self.signal)
 
     self.signal_dir = signal_dir
@@ -203,9 +203,10 @@ class DataReader(object):
         # ratio = np.random.uniform(self.config.noise_low, self.config.noise_high)
         tmp_noisy_signal = (tmp_signal + ratio * tmp_noise)
         noisy_signal = np.stack([tmp_noisy_signal.real, tmp_noisy_signal.imag], axis=-1)
+        if np.isnan(noisy_signal).any() or np.isinf(noisy_signal).any():
+          continue
         noisy_signal = noisy_signal/np.std(noisy_signal)
-        tmp_mask = (np.abs(tmp_signal)) / (np.abs(tmp_noisy_signal) + 1e-4)
-        # tmp_mask = np.abs(tmp_signal)/(np.abs(tmp_signal) + np.abs(ratio * tmp_noise) + 1e-4)
+        tmp_mask = np.abs(tmp_signal)/(np.abs(tmp_signal) + np.abs(ratio * tmp_noise) + 1e-4)
         tmp_mask[tmp_mask >= 1] = 1
         tmp_mask[tmp_mask <= 0] = 0
         mask = np.zeros([tmp_mask.shape[0], tmp_mask.shape[1], self.n_class])
@@ -236,8 +237,8 @@ class DataReader_test(DataReader):
 
     signal_list = pd.read_csv(signal_list, header=0)
     noise_list = pd.read_csv(noise_list, header=0)
-    self.signal = signal_list[signal_list['snr'] > self.config.snr_threshold]
-    self.noise = noise_list[noise_list['snr'] > self.config.snr_threshold]
+    self.signal = signal_list
+    self.noise = noise_list
     self.n_signal = len(self.signal)
     
     self.signal_dir = signal_dir
@@ -327,7 +328,6 @@ class DataReader_test(DataReader):
         if np.isinf(tmp_signal).any() or np.isnan(tmp_signal).any() or (not np.any(tmp_signal)):
           continue
         tmp_signal = tmp_signal/np.std(tmp_signal)
-        
         # tmp_signal = self.add_event(tmp_signal, channels, j)
         # if np.random.random() < 0.2:
         #   tmp_signal = np.fliplr(tmp_signal)
@@ -337,10 +337,11 @@ class DataReader_test(DataReader):
         ratio = self.config.noise_mean + np.random.randn() * self.config.noise_std 
       tmp_noisy_signal = (tmp_signal + ratio*tmp_noise)
       noisy_signal = np.stack([tmp_noisy_signal.real, tmp_noisy_signal.imag], axis=-1)
+      if np.isnan(noisy_signal).any() or np.isinf(noisy_signal).any():
+        continue
       std_noisy_signal = np.std(noisy_signal)
       noisy_signal = noisy_signal/std_noisy_signal
-      tmp_mask = (np.abs(tmp_signal)) / (np.abs(tmp_noisy_signal) + 1e-4)
-      # tmp_mask = np.abs(tmp_signal)/(np.abs(tmp_signal) + np.abs(ratio * tmp_noise) + 1e-4)
+      tmp_mask = np.abs(tmp_signal)/(np.abs(tmp_signal) + np.abs(ratio * tmp_noise) + 1e-4)
       tmp_mask[tmp_mask >= 1] = 1
       tmp_mask[tmp_mask <= 0] = 0
       mask = np.zeros([tmp_mask.shape[0], tmp_mask.shape[1], self.n_class])
@@ -391,18 +392,14 @@ class DataReader_pred(DataReader):
 
   def thread_main(self, sess, n_threads=1, start=0):
     index = list(range(start, self.n_signal, n_threads))
-    shift = 2500
+    shift = 0
     for i in index:
       fname = self.signal.iloc[i]['fname']
       data_signal = np.load(os.path.join(self.signal_dir, fname))
-      if len(data_signal['data'].shape) == 1:
-        f, t, tmp_signal = scipy.signal.stft(scipy.signal.detrend(data_signal['data'][shift:self.config.nt+shift]), fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
-      else:
-        f, t, tmp_signal = scipy.signal.stft(scipy.signal.detrend(data_signal['data'][shift:self.config.nt+shift, -1]), fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
+      f, t, tmp_signal = scipy.signal.stft(scipy.signal.detrend(data_signal['data'][shift:self.config.nt+shift]), fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
       noisy_signal = np.stack([tmp_signal.real, tmp_signal.imag], axis=-1)
       if np.isnan(noisy_signal).any() or np.isinf(noisy_signal).any():
         continue
-
       std_noisy_signal = np.std(noisy_signal)
       noisy_signal = noisy_signal/std_noisy_signal
       sess.run(self.enqueue, feed_dict={self.sample_placeholder: noisy_signal, 
