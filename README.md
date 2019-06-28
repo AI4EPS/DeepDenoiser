@@ -37,7 +37,7 @@ The npz file contains one variable: "data"
 
 The shape of "data" variable has a shape of 3000 x 3 with sampling rate of 100 Hz. 
 
-~~~python
+~~~bash
 python run.py --mode=pred --model_dir=Model/190624-234436 --data_dir=./Dataset/pred --data_list=./Dataset/pred.csv --output_dir=./output --plot_figure --save_result --batch_size=20
 ~~~
 
