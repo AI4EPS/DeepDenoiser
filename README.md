@@ -49,7 +49,7 @@ Notes:
 ## 5. Train
 ### Data format
 
-Required a csv file and a directory of npz files.
+Required: two csv files for signal and noise, corresponding directories of the npz files.
 
 The csv file contains four columns: "fname", "itp", "channels"
 
@@ -59,8 +59,11 @@ The shape of "data" variables has a shape of 9001 x 3
 
 The variables "itp" is the data points of first P arrival times. 
 
+Note: 
+In the demo data, for simplicity we use the waveform before itp as noise samples, so the train_noise_list is same as train_signal_list here.
+
 ~~~bash
-python run.py --mode=train --data_dir=./Dataset/train --data_list=./Dataset/train.csv --batch_size=20
+python run.py --mode=train --train_signal_dir=./Dataset/train --train_signal_list=./Dataset/train.csv --train_noise_dir=./Dataset/train --train_noise_list=./Dataset/train.csv --batch_size=20
 ~~~
 
 Please let us know of any bugs found in the code. Suggestions and collaborations are welcomed!
