@@ -396,7 +396,8 @@ class DataReader_pred(DataReader):
     for i in index:
       fname = self.signal.iloc[i]['fname']
       data_signal = np.load(os.path.join(self.signal_dir, fname))
-      f, t, tmp_signal = scipy.signal.stft(scipy.signal.detrend(data_signal['data'][shift:self.config.nt+shift]), fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
+      f, t, tmp_signal = scipy.signal.stft(scipy.signal.detrend(np.squeeze(data_signal['data'][shift:self.config.nt+shift])),
+                                           fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
       noisy_signal = np.stack([tmp_signal.real, tmp_signal.imag], axis=-1)
       if np.isnan(noisy_signal).any() or np.isinf(noisy_signal).any():
         continue
