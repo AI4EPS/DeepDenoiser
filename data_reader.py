@@ -399,9 +399,11 @@ class DataReader_pred(DataReader):
       f, t, tmp_signal = scipy.signal.stft(scipy.signal.detrend(np.squeeze(data_signal['data'][shift:self.config.nt+shift])),
                                            fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
       noisy_signal = np.stack([tmp_signal.real, tmp_signal.imag], axis=-1)
-      if np.isnan(noisy_signal).any() or np.isinf(noisy_signal).any():
+      if np.isnan(noisy_signal).any() or np.isinf(noisy_signal).any() or (not np.any(noisy_signal)):
         continue
       std_noisy_signal = np.std(noisy_signal)
+      if std_noisy_signal == 0:
+        continue
       noisy_signal = noisy_signal/std_noisy_signal
       sess.run(self.enqueue, feed_dict={self.sample_placeholder: noisy_signal, 
                                         self.ratio_placeholder: std_noisy_signal,
