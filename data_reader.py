@@ -355,7 +355,7 @@ class DataReader_test(DataReader):
                                         self.noise_placeholder: ratio*tmp_noise,
                                         self.fname_placeholder: fname})
 
-class DataReader_pred(DataReader):
+class DataReader_pred_queue(DataReader):
 
   def __init__(self,
                signal_dir,
@@ -408,6 +408,77 @@ class DataReader_pred(DataReader):
       sess.run(self.enqueue, feed_dict={self.sample_placeholder: noisy_signal, 
                                         self.ratio_placeholder: std_noisy_signal,
                                         self.fname_placeholder: fname})
+
+class DataReader_pred():
+
+  def __init__(self,
+               signal_dir,
+               signal_list,
+               queue_size,
+               coord,
+               config=Config()):
+    self.config = config
+    signal_list = pd.read_csv(signal_list)
+    self.signal = signal_list
+    self.n_signal = len(self.signal)
+    self.signal_dir = signal_dir
+    self.n_class = config.n_class
+    FT_shape = self.get_shape()
+    self.X_shape = [FT_shape[0], FT_shape[1], 2]
+    self.Y_shape = [FT_shape[0], FT_shape[1], self.n_class]
+
+    #self.n_class = config.n_class
+    #self.X_shape = config.X_shape
+    #self.Y_shape = config.Y_shape
+
+    #self.coord = coord
+    #self.threads = []
+    #self.queue_size = queue_size
+    #self.add_placeholder()
+
+  def get_shape(self):
+    fname = self.signal.iloc[0]['fname']
+    data_signal = np.load(os.path.join(self.signal_dir, fname))
+    f, t, tmp_signal = scipy.signal.stft(scipy.signal.detrend(np.squeeze(data_signal['data'])),
+                                         fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
+    return tmp_signal.shape
+  
+  #def add_placeholder(self):
+  #  self.sample_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
+  #  self.ratio_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
+  #  self.fname_placeholder = tf.placeholder(dtype=tf.string, shape=None)
+  #  self.queue = tf.PaddingFIFOQueue(self.queue_size,
+  #                                   ['float32', 'float32', 'string'],
+  #                                   shapes=[self.config.X_shape, [], []])
+  #  self.enqueue = self.queue.enqueue([self.sample_placeholder, self.ratio_placeholder, self.fname_placeholder])
+
+  #def dequeue(self, num_elements):
+  #  output = self.queue.dequeue_up_to(num_elements)
+  #  return output
+  def __len__(self):
+      return self.n_signal
+
+  #def thread_main(self, sess, n_threads=1, start=0):
+  def __getitem__(self, i):
+  #  index = list(range(start, self.n_signal, n_threads))
+  #  shift = 0
+  #  for i in index:
+    #for i in range(self.n_signal):
+    fname = self.signal.iloc[i]['fname']
+    data_signal = np.load(os.path.join(self.signal_dir, fname))
+    f, t, tmp_signal = scipy.signal.stft(scipy.signal.detrend(np.squeeze(data_signal['data'])),
+                                         fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
+    noisy_signal = np.stack([tmp_signal.real, tmp_signal.imag], axis=-1)
+    noisy_signal[np.isnan(noisy_signal)] = 0
+    noisy_signal[np.isinf(noisy_signal)] = 0
+    std_noisy_signal = np.std(noisy_signal)
+    if std_noisy_signal != 0:
+      noisy_signal = noisy_signal/std_noisy_signal
+    #sess.run(self.enqueue, feed_dict={self.sample_placeholder: noisy_signal, 
+    #                                  self.ratio_placeholder: std_noisy_signal,
+    #                                  self.fname_placeholder: fname})
+    return noisy_signal, std_noisy_signal, fname
+
 
 if __name__ == "__main__":
   pass

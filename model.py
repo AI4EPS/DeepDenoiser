@@ -54,10 +54,10 @@ class Model:
     self.loss_type = config.loss_type
     self.weight_decay = config.weight_decay
     self.optimizer = config.optimizer
-    self.learning_rate = config.learning_rate
     self.decay_step = config.decay_step
     self.decay_rate = config.decay_rate
     self.momentum = config.momentum
+    self.learning_rate = config.learning_rate
     self.global_step = tf.get_variable(name="global_step", initializer=0, dtype=tf.int32)
     self.summary_train = []
     self.summary_valid = []
@@ -77,6 +77,8 @@ class Model:
     self.is_training = tf.placeholder(dtype=tf.bool, name="is_training")
     # self.keep_prob = tf.placeholder(dtype=tf.float32, name="keep_prob")
     self.drop_rate = tf.placeholder(dtype=tf.float32, name="drop_rate")
+    # self.learning_rate = tf.placeholder_with_default(tf.constant(0.01, dtype=tf.float32), shape=[], name="learning_rate")
+    # self.global_step = tf.placeholder_with_default(tf.constant(0, dtype=tf.int32), shape=[], name="global_step")
 
 
   def add_prediction_op(self):
@@ -336,6 +338,27 @@ class Model:
       self.train_op = optimizer.minimize(self.loss, global_step=self.global_step)
     tmp = tf.summary.scalar("learning_rate", self.learning_rate_node)
     self.summary_train.append(tmp)
+
+  def reset_learning_rate(self, sess, learning_rate, global_step):
+    self.learning_rate = learning_rate
+    assign_op = self.global_step.assign(global_step)
+    sess.run(assign_op)
+    if self.optimizer == "momentum":
+      self.learning_rate_node = tf.train.exponential_decay(learning_rate=learning_rate,
+                                 global_step=self.global_step,
+                                 decay_steps=self.decay_step,
+                                 decay_rate=self.decay_rate,
+                                 staircase=True)
+      optimizer = tf.train.MomentumOptimizer(learning_rate=self.learning_rate_node,
+                           momentum=self.momentum)
+    elif self.optimizer == "adam":
+      self.learning_rate_node = tf.train.exponential_decay(learning_rate=self.learning_rate,
+                                 global_step=self.global_step,
+                                 decay_steps=self.decay_step,
+                                 decay_rate=self.decay_rate,
+                                 staircase=True)
+
+      optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_node)
 
 
   def train_on_batch(self, sess, X_batch, Y_batch, summary_writer, drop_rate=0.0):

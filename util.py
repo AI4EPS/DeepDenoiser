@@ -332,13 +332,13 @@ def postprocessing_pred(i, preds, X, fname, figure_dir=None, result_dir=None):
 
   if result_dir is not None:
     try:
-      np.savez(os.path.join(result_dir, fname[i].decode()), 
+      np.savez(os.path.join(result_dir, fname[i]), 
                             noisy_signal=noisy_signal, 
                             denoised_signal=denoised_signal, 
                             denoised_noise=denoised_noise, t=t1)
     except FileNotFoundError:
-      os.makedirs(os.path.dirname(os.path.join(result_dir, fname[i].decode())))
-      np.savez(os.path.join(result_dir, fname[i].decode()), 
+      os.makedirs(os.path.dirname(os.path.join(result_dir, fname[i])))
+      np.savez(os.path.join(result_dir, fname[i]), 
                           noisy_signal=noisy_signal, 
                           denoised_signal=denoised_signal, 
                           denoised_noise=denoised_noise, t=t1)
@@ -372,18 +372,17 @@ def postprocessing_pred(i, preds, X, fname, figure_dir=None, result_dir=None):
     plt.subplot(313)
     plt.pcolormesh(t_FT, f_FT, np.abs(
         X[i, :, :, 0]+X[i, :, :, 1]*1j)*preds[i, :, :, 1], vmin=0, vmax=vmax, label='Recovered noise')
-    plt.gca().set_xticklabels([])
     plt.xlabel("Time (s)", fontsize='large')
     plt.text(text_loc[0], text_loc[1], '(iii)', horizontalalignment='center',
             transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
 
     try:
-      plt.savefig(os.path.join(figure_dir, fname[i].decode().rstrip('.npz')+'_FT.png'), bbox_inches='tight')
-      # plt.savefig(os.path.join(figure_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_FT.pdf'), bbox_inches='tight')
+      plt.savefig(os.path.join(figure_dir, fname[i].rstrip('.npz')+'_FT.png'), bbox_inches='tight')
+      # plt.savefig(os.path.join(figure_dir, fname[i].split('/')[-1].rstrip('.npz')+'_FT.pdf'), bbox_inches='tight')
     except FileNotFoundError:
-      os.makedirs(os.path.dirname(os.path.join(figure_dir, fname[i].decode().rstrip('.npz')+'_FT.png')), exist_ok=True)
-      plt.savefig(os.path.join(figure_dir, fname[i].decode().rstrip('.npz')+'_FT.png'), bbox_inches='tight')
-      # plt.savefig(os.path.join(figure_dir, fname[i].decode().split('/')[-1].rstrip('.npz')+'_FT.pdf'), bbox_inches='tight')
+      os.makedirs(os.path.dirname(os.path.join(figure_dir, fname[i].rstrip('.npz')+'_FT.png')), exist_ok=True)
+      plt.savefig(os.path.join(figure_dir, fname[i].rstrip('.npz')+'_FT.png'), bbox_inches='tight')
+      # plt.savefig(os.path.join(figure_dir, fname[i].split('/')[-1].rstrip('.npz')+'_FT.pdf'), bbox_inches='tight')
     plt.close(i)
 
     plt.figure(i)
@@ -420,8 +419,8 @@ def postprocessing_pred(i, preds, X, fname, figure_dir=None, result_dir=None):
     plt.text(text_loc[0], text_loc[1], '(iii)', horizontalalignment='center',
             transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
 
-    plt.savefig(os.path.join(figure_dir, fname[i].decode().rstrip('.npz')+'_wave.png'), bbox_inches='tight')
-    # plt.savefig(os.path.join(figure_dir, fname[i].decode().rstrip('.npz')+'_wave.pdf'), bbox_inches='tight')
+    plt.savefig(os.path.join(figure_dir, fname[i].rstrip('.npz')+'_wave.png'), bbox_inches='tight')
+    # plt.savefig(os.path.join(figure_dir, fname[i].rstrip('.npz')+'_wave.pdf'), bbox_inches='tight')
     plt.close(i)
   
   return
