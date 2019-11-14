@@ -24,7 +24,7 @@ Located in directory: **Dataset/**
 
 ## 3. Model
 
-Located in directory: **Model/190624-234436**
+Located in directory: **Model/190614-104802**
 
 ## 4. Prediction
 ### Data format:
@@ -38,7 +38,7 @@ The npz file contains one variable: "data"
 The variable "data" is one component sample with a length of 3000 with sampling rate of 100 Hz. 
 
 ~~~bash
-python run.py --mode=pred --model_dir=Model/190624-234436 --data_dir=./Dataset/pred --data_list=./Dataset/pred.csv --output_dir=./output --plot_figure --save_result --batch_size=20
+python run.py --mode=pred --model_dir=Model/190614-104802 --data_dir=./Dataset/pred --data_list=./Dataset/pred.csv --output_dir=./output --plot_figure --save_result --batch_size=20
 ~~~
 
 Notes:
