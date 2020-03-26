@@ -18,19 +18,19 @@ class Config():
   time_range = [0, 30]
   nperseg = 30
   nfft = 60
+  plot = False
   nt = 4100
   X_shape = [31, int(np.ceil(nt/(nperseg//2)))+1, 2]
   Y_shape = [31, int(np.ceil(nt/(nperseg//2)))+1, n_class]
-  queue_size = 10
-  plot = False
-  use_seed = False
-  use_buffer = True
   # signal_shape = [31, 201]
   # noise_shape = signal_shape
+  use_seed = False
+  queue_size = 10
   # noise_mean = 2
   # noise_std = 1
   # noise_low = 1
   # noise_high = 5
+  use_buffer = True
   # snr_threshold = 10
 
 class DataReader(object):
@@ -146,7 +146,7 @@ class DataReader(object):
           continue
 
         noisy_signal = noisy_signal/np.std(noisy_signal)
-        tmp_mask = np.abs(tmp_signal)/(np.abs(tmp_signal) + np.abs(ratio * tmp_noise) + 1e-10)
+        tmp_mask = np.abs(tmp_signal)/(np.abs(tmp_signal) + np.abs(ratio * tmp_noise) + 1e-4)
         tmp_mask[tmp_mask >= 1] = 1
         tmp_mask[tmp_mask <= 0] = 0
         mask = np.zeros([tmp_mask.shape[0], tmp_mask.shape[1], self.n_class])
