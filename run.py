@@ -278,20 +278,22 @@ def train_fn(args, data_reader, data_reader_valid=None):
         progressbar = tqdm(range(0, data_reader_valid.n_signal, args.batch_size), desc="Valid: ")
         for step in progressbar:
           X_batch, Y_batch = sess.run(batch_valid)
-          loss_batch, preds_batch = model.valid_on_batch(sess, X_batch, Y_batch, summary_writer, args.drop_rate)
+          loss_batch, preds_batch = model.valid_on_batch(sess, X_batch, Y_batch, summary_writer)
           total_step_valid += 1
           mean_loss_valid += (loss_batch-mean_loss_valid)/total_step_valid
           progressbar.set_description("Valid: loss={:.6f}, mean loss={:.6f}".format(loss_batch, mean_loss_valid))
           flog.write("Valid: {}, step: {}, loss: {}, mean loss: {}\n".format(epoch, step//args.batch_size, loss_batch, mean_loss_valid))
+      else:
+        loss_batch, preds_batch = model.valid_on_batch(sess, X_batch, Y_batch, summary_writer)
 
         # plot_result(epoch, args.num_plots, figure_dir,  preds_batch, X_batch, Y_batch)
-        pool.map(partial(plot_result_thread, 
-                         epoch = epoch,
-                         preds = preds_batch,
-                         X = X_batch,
-                         Y = Y_batch,
-                         figure_dir = figure_dir),
-                range(args.num_plots))
+      pool.map(partial(plot_result_thread, 
+                        epoch = epoch,
+                        preds = preds_batch,
+                        X = X_batch,
+                        Y = Y_batch,
+                        figure_dir = figure_dir),
+              range(min(args.num_plots, len(preds_batch))))
 
     flog.close()
     pool.close()
@@ -498,15 +500,15 @@ def main(args):
           signal_list=args.train_signal_list,
           noise_dir=args.train_noise_dir,
           noise_list=args.train_noise_list,
-          queue_size=args.batch_size*2,
+          queue_size=args.batch_size*10,
           coord=coord)
       if (args.valid_signal_list is not None) and (args.valid_noise_list is not None):
-        data_reader_valid = DataReader(
+        data_reader_valid = DataReader_valid(
             signal_dir=args.valid_signal_dir,
             signal_list=args.valid_signal_list,
             noise_dir=args.valid_noise_dir,
             noise_list=args.valid_noise_list,
-            queue_size=args.batch_size*2,
+            queue_size=args.batch_size*10,
             coord=coord)
         logging.info("Dataset size: training %d, validation %d" %  (data_reader.n_signal, data_reader_valid.n_signal))
       else:

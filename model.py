@@ -374,8 +374,8 @@ class Model:
     summary_writer.add_summary(step_summary, step)
     return loss
 
-  def valid_on_batch(self, sess, X_batch, Y_batch, summary_writer, drop_rate=0.0):
-    feed = {self.drop_rate: drop_rate,
+  def valid_on_batch(self, sess, X_batch, Y_batch, summary_writer):
+    feed = {self.drop_rate: 0,
             self.is_training: False,
             self.X: X_batch,
             self.Y: Y_batch}
