@@ -246,7 +246,7 @@ def train_fn(args, data_reader, data_reader_valid=None):
       logging.info("restoring models...")
       latest_check_point = tf.train.latest_checkpoint(args.model_dir)
       saver.restore(sess, latest_check_point)
-      model.reset_learning_rate(sess, learning_rate=0.01, global_step=0)
+      # model.reset_learning_rate(sess, learning_rate=0.001, global_step=0)
 
 
     threads = data_reader.start_threads(sess, n_threads=multiprocessing.cpu_count())

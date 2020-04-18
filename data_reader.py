@@ -18,7 +18,7 @@ class Config():
   time_range = [0, 90]
   nperseg = 30
   nfft = 60
-  nt = 3001
+  nt = 9001
   X_shape = [31, int(np.ceil(nt/(nperseg//2)))+1, 2]
   Y_shape = [31, int(np.ceil(nt/(nperseg//2)))+1, n_class]
   queue_size = 10
