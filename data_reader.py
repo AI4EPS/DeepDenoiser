@@ -15,10 +15,10 @@ class Config():
   fs = 100
   dt = 1.0/fs
   freq_range = [0, fs/2]
-  time_range = [0, 30]
+  time_range = [0, 90]
   nperseg = 30
   nfft = 60
-  nt = 4100
+  nt = 3001
   X_shape = [31, int(np.ceil(nt/(nperseg//2)))+1, 2]
   Y_shape = [31, int(np.ceil(nt/(nperseg//2)))+1, n_class]
   queue_size = 10
@@ -94,7 +94,7 @@ class DataReader(object):
         try:
           if fname_signal not in self.buffer_signal:
             data_FT = []
-            tmp_data = np.load(fname_signal)['data'][:self.config.nt]
+            tmp_data = np.squeeze(np.load(fname_signal)['data'])[:self.config.nt]
             tmp_data -= np.mean(tmp_data)
             f, t, tmp_FT = scipy.signal.stft(tmp_data, fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
             self.buffer_signal[fname_signal] = {'data_FT': tmp_FT}
@@ -107,7 +107,7 @@ class DataReader(object):
         try:
           if fname_noise not in self.buffer_noise:
             data_FT = []
-            tmp_data = np.load(fname_noise)['data'][:self.config.nt]
+            tmp_data = np.squeeze(np.load(fname_noise)['data'])[:self.config.nt]
             tmp_data -= np.mean(tmp_data)
             f, t, tmp_FT = scipy.signal.stft(tmp_data, fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
             self.buffer_noise[fname_noise] = {'data_FT': tmp_FT}
@@ -120,7 +120,10 @@ class DataReader(object):
           stop = True
           break
 
-        tmp_noise = meta_noise['data_FT']
+        tmp_noise = meta_noise["data_FT"]
+        if np.shape(tmp_noise) != tuple(self.X_shape[:2]):
+          logging.warning(f"Shape error in {fname_noise}: {np.shape(np.load(fname_noise)['data'])}\n")
+          continue
         if np.isinf(tmp_noise).any() or np.isnan(tmp_noise).any() or (not np.any(tmp_noise)):
             continue
         tmp_noise = tmp_noise/np.std(tmp_noise)
@@ -129,7 +132,11 @@ class DataReader(object):
         # if np.random.random() < 0.9:
           # shift = np.random.randint(-self.X_shape[1], 1, None, 'int')
           # tmp_signal[:, -shift:] = meta_signal['data_FT'][:, self.X_shape[1]:2*self.X_shape[1]+shift, j]
+
         tmp_signal = meta_signal["data_FT"]
+        if np.shape(tmp_signal) != tuple(self.X_shape[:2]):
+          logging.warning(f"Shape error in {fname_signal}: {np.shape(np.load(fname_signal)['data'])}\n")
+          continue
         if np.isinf(tmp_signal).any() or np.isnan(tmp_signal).any() or (not np.any(tmp_signal)):
           continue
         tmp_signal = tmp_signal/np.std(tmp_signal)
