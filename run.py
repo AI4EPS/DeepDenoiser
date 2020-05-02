@@ -249,9 +249,9 @@ def train_fn(args, data_reader, data_reader_valid=None):
       # model.reset_learning_rate(sess, learning_rate=0.001, global_step=0)
 
 
-    threads = data_reader.start_threads(sess, n_threads=multiprocessing.cpu_count())
+    threads = data_reader.start_threads(sess, n_threads=min(4, multiprocessing.cpu_count()))
     if data_reader_valid is not None:
-      threads_valid = data_reader_valid.start_threads(sess, n_threads=multiprocessing.cpu_count())
+      threads_valid = data_reader_valid.start_threads(sess, n_threads=min(4, multiprocessing.cpu_count()))
     flog = open(os.path.join(log_dir, 'loss.log'), 'w')
 
     total_step = 0
@@ -350,7 +350,7 @@ def test_fn(args, data_reader, figure_dir=None, result_dir=None):
     latest_check_point = tf.train.latest_checkpoint(args.model_dir)
     saver.restore(sess, latest_check_point)
 
-    threads = data_reader.start_threads(sess, n_threads=multiprocessing.cpu_count())
+    threads = data_reader.start_threads(sess, n_threads=min(4, multiprocessing.cpu_count()))
 
     flog = open(os.path.join(log_dir, 'loss.log'), 'w')
     total_step = 0
@@ -513,7 +513,7 @@ def main(args):
         logging.info("Dataset size: training %d, validation %d" %  (data_reader.n_signal, data_reader_valid.n_signal))
       else:
         data_reader_valid = None
-      logging.info("Dataset size: training %d, validation 0" %  (data_reader.n_signal))
+        logging.info("Dataset size: training %d, validation 0" %  (data_reader.n_signal))
     train_fn(args, data_reader, data_reader_valid)
   
   elif args.mode == "valid" or args.mode == "test":

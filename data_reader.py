@@ -120,7 +120,7 @@ class DataReader(object):
           stop = True
           break
 
-        tmp_noise = meta_noise["data_FT"]
+        tmp_noise = meta_noise["data_FT"].copy()
         if np.shape(tmp_noise) != tuple(self.X_shape[:2]):
           logging.warning(f"Shape error in {fname_noise}: {np.shape(np.load(fname_noise)['data'])}\n")
           continue
@@ -133,7 +133,7 @@ class DataReader(object):
           # shift = np.random.randint(-self.X_shape[1], 1, None, 'int')
           # tmp_signal[:, -shift:] = meta_signal['data_FT'][:, self.X_shape[1]:2*self.X_shape[1]+shift, j]
 
-        tmp_signal = meta_signal["data_FT"]
+        tmp_signal = meta_signal["data_FT"].copy()
         if np.shape(tmp_signal) != tuple(self.X_shape[:2]):
           logging.warning(f"Shape error in {fname_signal}: {np.shape(np.load(fname_signal)['data'])}\n")
           continue
