@@ -124,7 +124,7 @@ class DataReader(object):
         if np.shape(tmp_noise) != tuple(self.X_shape[:2]):
           logging.warning(f"Shape error in {fname_noise}: {np.shape(np.load(fname_noise)['data'])}\n")
           continue
-        if np.isinf(tmp_noise).any() or np.isnan(tmp_noise).any() or (not np.any(tmp_noise)):
+        if np.isinf(tmp_noise).any() or np.isnan(tmp_noise).any() or (np.std(tmp_noise) == 0):
             continue
         tmp_noise = tmp_noise/np.std(tmp_noise)
 
@@ -137,7 +137,7 @@ class DataReader(object):
         if np.shape(tmp_signal) != tuple(self.X_shape[:2]):
           logging.warning(f"Shape error in {fname_signal}: {np.shape(np.load(fname_signal)['data'])}\n")
           continue
-        if np.isinf(tmp_signal).any() or np.isnan(tmp_signal).any() or (not np.any(tmp_signal)):
+        if np.isinf(tmp_signal).any() or np.isnan(tmp_signal).any() or (np.std(tmp_signal) == 0):
           continue
         tmp_signal = tmp_signal/np.std(tmp_signal)
         
