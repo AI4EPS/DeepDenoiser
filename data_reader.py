@@ -141,8 +141,6 @@ class DataReader(object):
           continue
         tmp_signal = tmp_signal/np.std(tmp_signal)
         
-        if np.random.random() < 0.1:
-          tmp_signal = np.fliplr(tmp_signal)
 
         # ratio = np.random.chisquare(2)
         ratio = np.random.randn() 
