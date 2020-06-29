@@ -184,6 +184,89 @@ class DataReader_valid(DataReader):
                queue_size, coord, config)
     self.n_signal = self.n_signal//batch_size * batch_size
 
+
+  def thread_main(self, sess, n_threads=1, start=0):
+    stop = False
+    while not stop:
+      index = list(range(start, self.n_signal, n_threads))
+      for i in index:
+        fname_signal = os.path.join(self.signal_dir, self.signal.iloc[i]['fname'])
+        try:
+          if fname_signal not in self.buffer_signal:
+            data_FT = []
+            tmp_data = np.squeeze(np.load(fname_signal)['data'])[:self.config.nt]
+            tmp_data -= np.mean(tmp_data)
+            f, t, tmp_FT = scipy.signal.stft(tmp_data, fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
+            self.buffer_signal[fname_signal] = {'data_FT': tmp_FT}
+          meta_signal = self.buffer_signal[fname_signal]
+        except:
+          logging.error("Failed reading signal: {}".format(fname_signal))
+          continue
+
+        fname_noise = os.path.join(self.noise_dir, self.noise.sample(n=1, random_state=i).iloc[0]['fname'])
+        try:
+          if fname_noise not in self.buffer_noise:
+            data_FT = []
+            tmp_data = np.squeeze(np.load(fname_noise)['data'])[:self.config.nt]
+            tmp_data -= np.mean(tmp_data)
+            f, t, tmp_FT = scipy.signal.stft(tmp_data, fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
+            self.buffer_noise[fname_noise] = {'data_FT': tmp_FT}
+          meta_noise = self.buffer_noise[fname_noise]
+        except:
+          logging.error("Failed reading noise: {}".format(fname_noise))
+          continue
+
+        if self.coord.should_stop():
+          stop = True
+          break
+        
+        skip = False
+
+        tmp_noise = meta_noise["data_FT"].copy()
+        if np.shape(tmp_noise) != tuple(self.X_shape[:2]):
+          logging.error(f"Shape error in {fname_noise}: {np.shape(np.load(fname_noise)['data'])}\n")
+        if np.isinf(tmp_noise).any() or np.isnan(tmp_noise).any():
+          np.nan_to_num(tmp_noise, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+          skip = True
+        if np.std(tmp_noise) != 0:
+          tmp_noise = tmp_noise/np.std(tmp_noise)
+        else:
+          skip = True
+
+        tmp_signal = meta_signal["data_FT"].copy()
+        if np.shape(tmp_signal) != tuple(self.X_shape[:2]):
+          logging.error(f"Shape error in {fname_signal}: {np.shape(np.load(fname_signal)['data'])}\n")
+        if np.isinf(tmp_signal).any() or np.isnan(tmp_signal).any():
+          np.nan_to_num(tmp_signal, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+          skip = True
+        if np.std(tmp_signal) != 0:
+          tmp_signal = tmp_signal/np.std(tmp_signal)
+        else:
+          skip = True
+        
+        np.random.seed(i)
+        # ratio = np.random.chisquare(2)
+        ratio = np.random.randn()
+
+        tmp_noisy_signal = (tmp_signal + ratio * tmp_noise)
+        noisy_signal = np.stack([tmp_noisy_signal.real, tmp_noisy_signal.imag], axis=-1)
+        if np.isnan(noisy_signal).any() or np.isinf(noisy_signal).any():
+          np.nan_to_num(noisy_signal, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+          skip = True
+
+        noisy_signal = noisy_signal/np.std(noisy_signal)
+        tmp_mask = np.abs(tmp_signal)/(np.abs(tmp_signal) + np.abs(ratio * tmp_noise) + 1e-10)
+        tmp_mask[tmp_mask >= 1] = 1
+        tmp_mask[tmp_mask <= 0] = 0
+        mask = np.zeros([tmp_mask.shape[0], tmp_mask.shape[1], self.n_class])
+        mask[:, :, 0] = tmp_mask
+        mask[:, :, 1] = 1-tmp_mask
+        if skip:
+          mask *= 0
+
+        sess.run(self.enqueue, feed_dict={self.sample_placeholder: noisy_signal, 
+                                          self.target_placeholder: mask})
+
 class DataReader_test(DataReader):
 
   def __init__(self,

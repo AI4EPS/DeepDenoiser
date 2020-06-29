@@ -270,7 +270,7 @@ def train_fn(args, data_reader, data_reader_valid=None):
       for step in progressbar:
         X_batch, Y_batch = sess.run(batch)
         loss_batch = model.train_on_batch(sess, X_batch, Y_batch, summary_writer, args.drop_rate)
-        if epoch < 1:
+        if (epoch < 1) and (args.model_dir is None):
           mean_loss = loss_batch
         else:
           total_step += 1
