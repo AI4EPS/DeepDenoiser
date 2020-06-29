@@ -171,7 +171,18 @@ class DataReader(object):
     return self.threads
 
 class DataReader_valid(DataReader):
-  pass
+  def __init__(self,
+               signal_dir = None,
+               signal_list = None,
+               noise_dir = None,
+               noise_list = None,
+               queue_size = None,
+               batch_size = None,
+               coord = None,
+               config=Config()):
+    super().__init__(signal_dir, signal_list, noise_dir, noise_list,
+               queue_size, coord, config)
+    self.n_signal = self.n_signal//batch_size * batch_size
 
 class DataReader_test(DataReader):
 

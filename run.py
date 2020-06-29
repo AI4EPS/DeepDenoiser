@@ -251,12 +251,20 @@ def train_fn(args, data_reader, data_reader_valid=None):
 
     threads = data_reader.start_threads(sess, n_threads=min(4, multiprocessing.cpu_count()))
     if data_reader_valid is not None:
-      threads_valid = data_reader_valid.start_threads(sess, n_threads=min(4, multiprocessing.cpu_count()))
+      threads_valid = data_reader_valid.start_threads(sess, n_threads=1)
     flog = open(os.path.join(log_dir, 'loss.log'), 'w')
 
     total_step = 0
     mean_loss = 0
-    pool = multiprocessing.Pool(2)
+    # if args.plot_figure:
+    #   num_pool = multiprocessing.cpu_count()*2
+    # elif args.save_result:
+    #   num_pool = multiprocessing.cpu_count()
+    # else:
+    #   num_pool = 2
+    num_pool = 4
+    pool = multiprocessing.Pool(num_pool)
+    best_valid_loss = np.inf
     for epoch in range(args.epochs):
       progressbar = tqdm(range(0, data_reader.n_signal, args.batch_size), desc="{}: ".format(log_dir.split("/")[-1]))
       for step in progressbar:
@@ -269,20 +277,24 @@ def train_fn(args, data_reader, data_reader_valid=None):
           mean_loss += (loss_batch-mean_loss)/total_step
         progressbar.set_description("{}: epoch={}, loss={:.6f}, mean loss={:.6f}".format(log_dir.split("/")[-1], epoch, loss_batch, mean_loss))
         flog.write("Epoch: {}, step: {}, loss: {}, mean loss: {}\n".format(epoch, step//args.batch_size, loss_batch, mean_loss))
-      saver.save(sess, os.path.join(log_dir, "model_{}.ckpt".format(epoch)))
+      if data_reader_valid is None:
+        saver.save(sess, os.path.join(log_dir, "model_{}.ckpt".format(epoch)))
 
       ## valid
       if data_reader_valid is not None:
-        mean_loss_valid = 0
-        total_step_valid = 0
+        valid_loss = 0
+        valid_step = 0
         progressbar = tqdm(range(0, data_reader_valid.n_signal, args.batch_size), desc="Valid: ")
         for step in progressbar:
           X_batch, Y_batch = sess.run(batch_valid)
           loss_batch, preds_batch = model.valid_on_batch(sess, X_batch, Y_batch, summary_writer)
-          total_step_valid += 1
-          mean_loss_valid += (loss_batch-mean_loss_valid)/total_step_valid
-          progressbar.set_description("Valid: loss={:.6f}, mean loss={:.6f}".format(loss_batch, mean_loss_valid))
-          flog.write("Valid: {}, step: {}, loss: {}, mean loss: {}\n".format(epoch, step//args.batch_size, loss_batch, mean_loss_valid))
+          valid_step += 1
+          valid_loss += (loss_batch-valid_loss)/valid_step
+          progressbar.set_description("Valid: loss={:.6f}, mean loss={:.6f}".format(loss_batch, valid_loss))
+        flog.write("Valid: {}, mean loss: {}\n".format(epoch, valid_loss))
+        if valid_loss < best_valid_loss:
+          best_valid_loss = valid_loss
+          saver.save(sess, os.path.join(log_dir, f"model_{epoch}_loss_{best_valid_loss:.2e}.ckpt"))
       else:
         loss_batch, preds_batch = model.valid_on_batch(sess, X_batch, Y_batch, summary_writer)
 
@@ -298,17 +310,17 @@ def train_fn(args, data_reader, data_reader_valid=None):
     flog.close()
     pool.close()
     data_reader.coord.request_stop()
-    if data_reader_valid is not None:
-      data_reader_valid.coord.request_stop()
+    # if data_reader_valid is not None:
+    #   data_reader_valid.coord.request_stop()
     try:
       data_reader.coord.join(threads, stop_grace_period_secs=10, ignore_live_threads=True)
-      if data_reader_valid is not None:
-        data_reader_valid.coord.join(threads_valid, stop_grace_period_secs=10, ignore_live_threads=True)
+      # if data_reader_valid is not None:
+      #   data_reader_valid.coord.join(threads_valid, stop_grace_period_secs=10, ignore_live_threads=True)
     except:
       pass
     sess.run(data_reader.queue.close(cancel_pending_enqueues=True))
-    if data_reader_valid is not None:
-      sess.run(data_reader_valid.queue.close(cancel_pending_enqueues=True))
+    # if data_reader_valid is not None:
+    #   sess.run(data_reader_valid.queue.close(cancel_pending_enqueues=True))
   return 0
 
 
@@ -509,6 +521,7 @@ def main(args):
             noise_dir=args.valid_noise_dir,
             noise_list=args.valid_noise_list,
             queue_size=args.batch_size*10,
+            batch_size=args.batch_size,
             coord=coord)
         logging.info("Dataset size: training %d, validation %d" %  (data_reader.n_signal, data_reader_valid.n_signal))
       else:
