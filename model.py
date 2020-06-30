@@ -387,7 +387,7 @@ class Model:
     summary_writer.add_summary(step_summary, step)
     return loss, preds
 
-  def test_on_batch(self, sess, summary_writer):
+  def valid_on_batch_queue(self, sess, summary_writer):
     feed = {self.drop_rate: 0,
             self.is_training: False}
     step_summary, step, loss, preds, X_batch, Y_batch, \

@@ -133,7 +133,7 @@ def plot_result_thread(i, epoch, preds, X, Y, figure_dir, mode="valid"):
   plt.close(i)
   return 0
 
-def postprocessing_test(i, preds, X, fname, figure_dir=None, result_dir=None, signal_FT=None, noise_FT=None, data_dir=None):
+def postprocessing_valid(i, preds, X, fname, figure_dir=None, result_dir=None, signal_FT=None, noise_FT=None, data_dir=None):
   if (figure_dir is not None) or (result_dir is not None):
     config = Config()
     t1, noisy_signal = scipy.signal.istft(

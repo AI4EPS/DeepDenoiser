@@ -324,7 +324,7 @@ def train_fn(args, data_reader, data_reader_valid=None):
   return 0
 
 
-def test_fn(args, data_reader, figure_dir=None, result_dir=None):
+def valid_fn(args, data_reader, figure_dir=None, result_dir=None):
   current_time = time.strftime("%y%m%d-%H%M%S")
   log_dir = os.path.join(args.log_dir, args.mode, current_time)
   logging.info("{} log: {}".format(args.mode, log_dir))
@@ -346,7 +346,7 @@ def test_fn(args, data_reader, figure_dir=None, result_dir=None):
   with tf.name_scope('Input_Batch'):
     batch = data_reader.dequeue(args.batch_size)
 
-  model = Model(config, input_batch=batch, mode='test')
+  model = Model(config)
   sess_config = tf.ConfigProto()
   sess_config.gpu_options.allow_growth = True
   sess_config.log_device_placement = False
@@ -367,38 +367,34 @@ def test_fn(args, data_reader, figure_dir=None, result_dir=None):
     flog = open(os.path.join(log_dir, 'loss.log'), 'w')
     total_step = 0
     mean_loss = 0
-    progressbar = tqdm(range(0, data_reader.n_signal, args.batch_size), desc=args.mode)
-    if args.plot_figure:                                                           
+    if args.plot_figure:                                              
       num_pool = multiprocessing.cpu_count()*2                                     
     elif args.save_result:                                                         
       num_pool = multiprocessing.cpu_count()                                       
     else:                                                                          
       num_pool = 2                                                                 
     pool = multiprocessing.Pool(num_pool) 
+    progressbar = tqdm(range(0, data_reader.n_signal, args.batch_size), desc=args.mode)
     for step in progressbar:
-
       if step + args.batch_size >= data_reader.n_signal:
         for t in threads:
           t.join()
         sess.run(data_reader.queue.close())
-      
-      loss_batch, preds_batch, X_batch, Y_batch, ratio_batch, \
-      signal_batch, noise_batch, fname_batch = model.test_on_batch(sess, summary_writer)
+      X_batch, Y_batch = sess.run(batch)
+      loss_batch, preds_batch = model.valid_on_batch(sess, X_batch, Y_batch, summary_writer)
       total_step += 1
       mean_loss += (loss_batch-mean_loss)/total_step
       progressbar.set_description("{}: loss={:.6f}, mean loss={:6f}".format(args.mode, loss_batch, mean_loss))
       flog.write("step: {}, loss: {}\n".format(step, loss_batch))
       flog.flush()
 
-      pool.map(partial(postprocessing_test, 
-                      preds=preds_batch, 
-                      X=X_batch*ratio_batch[:,np.newaxis,np.newaxis,np.newaxis],
-                      fname=fname_batch,
-                      figure_dir=figure_dir,
-                      result_dir=result_dir,
-                      signal_FT=signal_batch, 
-                      noise_FT=noise_batch), 
-                range(len(X_batch)))
+      pool.map(partial(plot_result_thread, 
+                        epoch = step,
+                        preds = preds_batch,
+                        X = X_batch,
+                        Y = Y_batch,
+                        figure_dir = figure_dir),
+              range(min(args.num_plots, len(preds_batch))))
 
     flog.close()
     pool.close()
@@ -531,15 +527,16 @@ def main(args):
   
   elif args.mode == "valid" or args.mode == "test":
     with tf.name_scope('create_inputs'):
-      data_reader = DataReader_test(
+      data_reader = DataReader_valid(
           signal_dir=args.valid_signal_dir,
           signal_list=args.valid_signal_list,
           noise_dir=args.valid_noise_dir,
           noise_list=args.valid_noise_list,
           queue_size=args.batch_size*2,
+          batch_size=args.batch_size,
           coord=coord)
     logging.info("Dataset Size: {}".format(data_reader.n_signal))
-    test_fn(args, data_reader)
+    valid_fn(args, data_reader)
 
   elif args.mode == "pred":
     with tf.name_scope('create_inputs'):
