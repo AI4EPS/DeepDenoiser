@@ -358,20 +358,20 @@ def postprocessing_pred(i, preds, X, fname, figure_dir=None, result_dir=None):
 
     plt.subplot(311)
     plt.pcolormesh(t_FT, f_FT, np.abs(
-        X[i, :, :, 0]+X[i, :, :, 1]*1j), vmin=0, vmax=vmax, label='Noisy signal')
+        X[i, :, :, 0]+X[i, :, :, 1]*1j), vmin=0, vmax=vmax, shading='auto',  label='Noisy signal')
     plt.gca().set_xticklabels([])
     plt.text(text_loc[0], text_loc[1], '(i)', horizontalalignment='center',
             transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
     plt.subplot(312)
     plt.pcolormesh(t_FT, f_FT, np.abs(
-        X[i, :, :, 0]+X[i, :, :, 1]*1j)*preds[i, :, :, 0], vmin=0, vmax=vmax, label='Recovered signal')
+        X[i, :, :, 0]+X[i, :, :, 1]*1j)*preds[i, :, :, 0], vmin=0, vmax=vmax, shading='auto',  label='Recovered signal')
     plt.gca().set_xticklabels([])
     plt.ylabel("Frequency (Hz)", fontsize='large')
     plt.text(text_loc[0], text_loc[1], '(ii)', horizontalalignment='center',
             transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)
     plt.subplot(313)
     plt.pcolormesh(t_FT, f_FT, np.abs(
-        X[i, :, :, 0]+X[i, :, :, 1]*1j)*preds[i, :, :, 1], vmin=0, vmax=vmax, label='Recovered noise')
+        X[i, :, :, 0]+X[i, :, :, 1]*1j)*preds[i, :, :, 1], vmin=0, vmax=vmax, shading='auto', label='Recovered noise')
     plt.xlabel("Time (s)", fontsize='large')
     plt.text(text_loc[0], text_loc[1], '(iii)', horizontalalignment='center',
             transform=plt.gca().transAxes, fontsize="medium", fontweight="bold", bbox=box)

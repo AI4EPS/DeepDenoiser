@@ -2,8 +2,11 @@ from __future__ import print_function, division
 import numpy as np
 import scipy.signal
 import pandas as pd
+from tensorflow.python.ops.linalg_ops import norm
 pd.options.mode.chained_assignment = None
 import tensorflow as tf
+from tensorflow.python.util import nest
+from scipy.interpolate import interp1d
 import threading
 import os
 import logging
@@ -32,6 +35,95 @@ class Config():
   # noise_high = 5
   use_buffer = True
   snr_threshold = 10
+
+# %%
+# def normalize(data, window=3000):
+#     """
+#     data: nsta, chn, nt
+#     """
+#     shift = window//2
+#     nt = len(data)
+
+#     ## std in slide windows
+#     data_pad = np.pad(data, ((window//2, window//2)), mode="reflect")
+#     t = np.arange(0, nt, shift, dtype="int")
+#     # print(f"nt = {nt}, nt+window//2 = {nt+window//2}")
+#     std = np.zeros(len(t))
+#     mean = np.zeros(len(t))
+#     for i in range(len(std)):
+#         std[i] = np.std(data_pad[i*shift:i*shift+window])
+#         mean[i] = np.mean(data_pad[i*shift:i*shift+window])
+
+#     t = np.append(t, nt)
+#     std = np.append(std, [np.std(data_pad[-window:])])
+#     mean = np.append(mean, [np.mean(data_pad[-window:])])
+
+#     # print(t)
+#     ## normalize data with interplated std 
+#     t_interp = np.arange(nt, dtype="int")
+#     std_interp = interp1d(t, std, kind="slinear")(t_interp)
+#     mean_interp = interp1d(t, mean, kind="slinear")(t_interp)
+#     data = (data - mean_interp)/(std_interp)
+#     return data, std_interp
+
+# %%
+def normalize(data, window=200):
+    """
+    data: nsta, chn, nt
+    """
+    shift = window//2
+    nt = data.shape[1]
+
+    ## std in slide windows
+    data_pad = np.pad(data, ((0,0), (window//2, window//2), (0,0)), mode="reflect")
+    t = np.arange(0, nt, shift, dtype="int")
+    # print(f"nt = {nt}, nt+window//2 = {nt+window//2}")
+    std = np.zeros(len(t))
+    mean = np.zeros(len(t))
+    for i in range(len(std)):
+        std[i] = np.std(data_pad[:,i*shift:i*shift+window, :])
+        mean[i] = np.mean(data_pad[:, i*shift:i*shift+window, :])
+
+    t = np.append(t, nt)
+    std = np.append(std, [np.std(data_pad[:, -window:, :])])
+    mean = np.append(mean, [np.mean(data_pad[:, -window:, :])])
+
+    # print(t)
+    ## normalize data with interplated std 
+    t_interp = np.arange(nt, dtype="int")
+    std_interp = interp1d(t, std, kind="slinear")(t_interp)
+    mean_interp = interp1d(t, mean, kind="slinear")(t_interp)
+    data = (data - mean_interp[np.newaxis, :, np.newaxis])/std_interp[np.newaxis, :, np.newaxis]
+    return data, std_interp
+
+# %%
+def py_func_decorator(output_types=None, output_shapes=None, name=None):
+  def decorator(func):
+    def call(*args, **kwargs):
+      nonlocal output_shapes
+      flat_output_types = nest.flatten(output_types)
+      # flat_output_types = tf.nest.flatten(output_types)
+      flat_values = tf.py_func(
+      # flat_values = tf.numpy_function(
+        func, 
+        inp=args, 
+        Tout=flat_output_types,
+        name=name
+      )
+      if output_shapes is not None:
+        for v, s in zip(flat_values, output_shapes):
+          v.set_shape(s)
+      return nest.pack_sequence_as(output_types, flat_values)
+      # return tf.nest.pack_sequence_as(output_types, flat_values)
+    return call
+  return decorator
+
+def dataset_map(iterator, output_types, output_shapes=None, num_parallel_calls=None, name=None):
+  dataset = tf.data.Dataset.range(len(iterator))
+  @py_func_decorator(output_types, output_shapes, name=name)
+  def index_to_entry(idx):
+    return iterator[idx]    
+  return dataset.map(index_to_entry, num_parallel_calls=num_parallel_calls)
 
 class DataReader(object):
 
@@ -414,71 +506,67 @@ class DataReader_pred():
   def __init__(self,
                signal_dir,
                signal_list,
-               queue_size,
-               coord,
+               sampling_rate=100,
                config=Config()):
     self.config = config
     signal_list = pd.read_csv(signal_list)
     self.signal = signal_list
     self.n_signal = len(self.signal)
     self.signal_dir = signal_dir
+    self.sampling_rate = sampling_rate
     self.n_class = config.n_class
     FT_shape = self.get_shape()
     self.X_shape = [FT_shape[0], FT_shape[1], 2]
     self.Y_shape = [FT_shape[0], FT_shape[1], self.n_class]
-
-    #self.n_class = config.n_class
-    #self.X_shape = config.X_shape
-    #self.Y_shape = config.Y_shape
-
-    #self.coord = coord
-    #self.threads = []
-    #self.queue_size = queue_size
-    #self.add_placeholder()
+    self.dtype = "float32"
 
   def get_shape(self):
     fname = self.signal.iloc[0]['fname']
-    data_signal = np.load(os.path.join(self.signal_dir, fname))
-    f, t, tmp_signal = scipy.signal.stft(scipy.signal.detrend(np.squeeze(data_signal['data'])),
-                                         fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
+    data = np.load(os.path.join(self.signal_dir, fname))["data"]
+    if self.sampling_rate != 100:
+      t = np.linspace(0, 1, len(data))
+      t_interp = np.linspace(0, 1, np.int(np.around(len(data)*100.0/self.sampling_rate)))
+      data = interp1d(t, data, kind="slinear")(t_interp)
+    f, t, tmp_signal = scipy.signal.stft(data,
+                                         fs=self.config.fs, nperseg=self.config.nperseg, 
+                                         nfft=self.config.nfft, boundary='zeros')
     return tmp_signal.shape
-  
-  #def add_placeholder(self):
-  #  self.sample_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
-  #  self.ratio_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
-  #  self.fname_placeholder = tf.placeholder(dtype=tf.string, shape=None)
-  #  self.queue = tf.PaddingFIFOQueue(self.queue_size,
-  #                                   ['float32', 'float32', 'string'],
-  #                                   shapes=[self.config.X_shape, [], []])
-  #  self.enqueue = self.queue.enqueue([self.sample_placeholder, self.ratio_placeholder, self.fname_placeholder])
 
-  #def dequeue(self, num_elements):
-  #  output = self.queue.dequeue_up_to(num_elements)
-  #  return output
   def __len__(self):
       return self.n_signal
 
-  #def thread_main(self, sess, n_threads=1, start=0):
   def __getitem__(self, i):
-  #  index = list(range(start, self.n_signal, n_threads))
-  #  shift = 0
-  #  for i in index:
-    #for i in range(self.n_signal):
     fname = self.signal.iloc[i]['fname']
-    data_signal = np.load(os.path.join(self.signal_dir, fname))
-    f, t, tmp_signal = scipy.signal.stft(scipy.signal.detrend(np.squeeze(data_signal['data'])),
-                                         fs=self.config.fs, nperseg=self.config.nperseg, nfft=self.config.nfft, boundary='zeros')
+    data = np.load(os.path.join(self.signal_dir, fname))["data"]
+    if self.sampling_rate != 100:
+      t = np.linspace(0, 1, len(data))
+      t_interp = np.linspace(0, 1, np.int(np.around(len(data)*100.0/self.sampling_rate)))
+      data = interp1d(t, data, kind="slinear")(t_interp)
+    f, t, tmp_signal = scipy.signal.stft(data,
+                                         fs=self.config.fs, nperseg=self.config.nperseg, 
+                                         nfft=self.config.nfft, boundary='zeros')
     noisy_signal = np.stack([tmp_signal.real, tmp_signal.imag], axis=-1)
     noisy_signal[np.isnan(noisy_signal)] = 0
     noisy_signal[np.isinf(noisy_signal)] = 0
-    std_noisy_signal = np.std(noisy_signal)
-    if std_noisy_signal != 0:
-      noisy_signal = noisy_signal/std_noisy_signal
-    #sess.run(self.enqueue, feed_dict={self.sample_placeholder: noisy_signal, 
-    #                                  self.ratio_placeholder: std_noisy_signal,
-    #                                  self.fname_placeholder: fname})
-    return noisy_signal, std_noisy_signal, fname
+    noisy_signal, std_noisy_signal = normalize(noisy_signal)
+    return noisy_signal.astype(self.dtype), std_noisy_signal.astype(self.dtype), fname
 
+  def dataset(self, batch_size, num_parallel_calls=4):
+    dataset = dataset_map(self, output_types=(self.dtype, self.dtype, "string"),
+                          output_shapes=(self.X_shape, self.X_shape[1], 1), 
+                          num_parallel_calls=num_parallel_calls)
+    dataset = dataset.batch(batch_size).prefetch(batch_size*3).make_one_shot_iterator().get_next()
+    return dataset
 
 if __name__ == "__main__":
-  pass
+  
+  # %%
+  data_reader = DataReader_pred(signal_dir="./Dataset/yixiao/", 
+                                signal_list="./Dataset/yixiao.csv")
+  noisy_signal, std_noisy_signal, fname  = data_reader[0]
+  print(noisy_signal.shape, std_noisy_signal.shape, fname)
+  batch = data_reader.dataset(10)
+  init = tf.initialize_all_variables()
+  sess = tf.Session()
+  sess.run(init)
+  print(sess.run(batch))

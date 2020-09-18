@@ -1,3 +1,5 @@
+import warnings
+warnings.filterwarnings('ignore', category=FutureWarning)
 import numpy as np
 import tensorflow as tf
 import argparse
@@ -125,6 +127,10 @@ def read_args():
                       default=None,
                       type=int,
                       help="input length")
+  parser.add_argument("--sampling_rate",
+                      default=100,
+                      type=int,
+                      help="sampling rate of pred data")
 
   parser.add_argument("--train_signal_dir",
                       default="./Dataset/train/",
@@ -410,10 +416,10 @@ def pred_fn(args, data_reader, figure_dir=None, result_dir=None, log_dir=None):
   with open(os.path.join(log_dir, 'config.log'), 'w') as fp:
     fp.write('\n'.join("%s: %s" % item for item in vars(config).items()))
 
-  #with tf.name_scope('Input_Batch'):
-  #  batch = data_reader.dequeue(args.batch_size)
+  with tf.name_scope('Input_Batch'):
+   data_batch = data_reader.dataset(args.batch_size)
 
-  #model = Model(config, input_batch=batch, mode='pred')
+  # model = Model(config, input_batch=batch, mode='pred')
   model = Model(config, mode='pred')
   sess_config = tf.ConfigProto()
   sess_config.gpu_options.allow_growth = True
@@ -437,24 +443,26 @@ def pred_fn(args, data_reader, figure_dir=None, result_dir=None, log_dir=None):
       num_pool = multiprocessing.cpu_count()                                       
     else:                                                                          
       num_pool = 2                                                                 
-    pool = multiprocessing.Pool(num_pool) 
+    multiprocessing.set_start_method('spawn')
+    pool = multiprocessing.Pool(num_pool)
     for step in tqdm(range(0, data_reader.n_signal, args.batch_size), desc="Pred"):
       #if step + args.batch_size >= data_reader.n_signal:
       #  for t in threads:
       #    t.join()
       #  sess.run(data_reader.queue.close())
-      X_batch = []
-      ratio_batch = []
-      fname_batch = []
-      for i in range(step, min(step+args.batch_size, data_reader.n_signal)):
-        X, ratio, fname = data_reader[i]
-        if np.std(X) == 0:
-          continue
-        X_batch.append(X)
-        ratio_batch.append(ratio)
-        fname_batch.append(fname)
-      X_batch = np.stack(X_batch, axis=0)
-      ratio_batch = np.array(ratio_batch)
+      # X_batch = []
+      # ratio_batch = []
+      # fname_batch = []
+      # for i in range(step, min(step+args.batch_size, data_reader.n_signal)):
+      #   X, ratio, fname = data_reader[i]
+      #   if np.std(X) == 0:
+      #     continue
+      #   X_batch.append(X)
+      #   ratio_batch.append(ratio)
+      #   fname_batch.append(fname)
+      # X_batch = np.stack(X_batch, axis=0)
+      # ratio_batch = np.array(ratio_batch)
+      X_batch, ratio_batch, fname_batch = sess.run(data_batch)
       preds_batch = sess.run(model.preds, feed_dict={model.X: X_batch,
                                                      model.drop_rate: 0,
                                                      model.is_training: False})
@@ -467,8 +475,8 @@ def pred_fn(args, data_reader, figure_dir=None, result_dir=None, log_dir=None):
 
       pool.map(partial(postprocessing_pred,
                        preds = preds_batch, 
-                       X = X_batch*ratio_batch[:,np.newaxis,np.newaxis,np.newaxis],
-                       fname = fname_batch,
+                       X = X_batch*ratio_batch[:,np.newaxis,:,np.newaxis],
+                       fname = fname_batch.astype('U13'),
                        figure_dir = figure_dir, 
                        result_dir = result_dir), 
                range(len(X_batch)))
@@ -531,8 +539,7 @@ def main(args):
       data_reader = DataReader_pred(
           signal_dir=args.data_dir,
           signal_list=args.data_list,
-          queue_size=args.batch_size*2,
-          coord=coord)
+          sampling_rate=args.sampling_rate)
     logging.info("Dataset Size: {}".format(data_reader.n_signal))
     pred_fn(args, data_reader, log_dir=args.output_dir)
 
