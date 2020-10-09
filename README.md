@@ -11,7 +11,7 @@ virtualenv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
-### Using ananconda
+### Using anaconda
 ```bash
 conda create --name venv python=3.6
 conda activate venv
