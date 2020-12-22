@@ -542,6 +542,8 @@ class DataReader_pred():
       t = np.linspace(0, 1, len(data))
       t_interp = np.linspace(0, 1, np.int(np.around(len(data)*100.0/self.sampling_rate)))
       data = interp1d(t, data, kind="slinear")(t_interp)
+    sos = scipy.signal.butter(4, 0.1, 'high', fs=100, output='sos') ## for stability of long sequence
+    data = scipy.signal.sosfilt(sos, data)
     f, t, tmp_signal = scipy.signal.stft(data,
                                          fs=self.config.fs, nperseg=self.config.nperseg, 
                                          nfft=self.config.nfft, boundary='zeros')
