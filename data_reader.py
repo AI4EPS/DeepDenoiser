@@ -522,7 +522,7 @@ class DataReader_pred():
 
   def get_shape(self):
     fname = self.signal.iloc[0]['fname']
-    data = np.load(os.path.join(self.signal_dir, fname))["data"]
+    data = np.load(os.path.join(self.signal_dir, fname), allow_pickle=True)["data"]
     data = np.squeeze(data)
     if self.sampling_rate != 100:
       t = np.linspace(0, 1, len(data))
@@ -538,7 +538,7 @@ class DataReader_pred():
 
   def __getitem__(self, i):
     fname = self.signal.iloc[i]['fname']
-    data = np.load(os.path.join(self.signal_dir, fname))["data"]
+    data = np.load(os.path.join(self.signal_dir, fname), allow_pickle=True)["data"]
     data = np.squeeze(data)
 
     if self.sampling_rate != 100:
