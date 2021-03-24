@@ -1,7 +1,9 @@
-import warnings
-warnings.filterwarnings('ignore', category=FutureWarning)
+#import warnings
+#warnings.filterwarnings('ignore', category=FutureWarning)
 import numpy as np
 import tensorflow as tf
+tf.compat.v1.disable_eager_execution()
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 import argparse
 import os
 import time
@@ -231,21 +233,21 @@ def train_fn(args, data_reader, data_reader_valid=None):
   with open(os.path.join(log_dir, 'config.log'), 'w') as fp:
     fp.write('\n'.join("%s: %s" % item for item in vars(config).items()))
 
-  with tf.name_scope('Input_Batch'):
+  with tf.compat.v1.name_scope('Input_Batch'):
     batch = data_reader.dequeue(args.batch_size)
     if data_reader_valid is not None:
       batch_valid = data_reader_valid.dequeue(args.batch_size)
 
   model = Model(config)
-  sess_config = tf.ConfigProto()
+  sess_config = tf.compat.v1.ConfigProto()
   sess_config.gpu_options.allow_growth = True
   sess_config.log_device_placement = False
 
-  with tf.Session(config=sess_config) as sess:
+  with tf.compat.v1.Session(config=sess_config) as sess:
 
-    summary_writer = tf.summary.FileWriter(log_dir, sess.graph)
-    saver = tf.train.Saver(tf.global_variables(), max_to_keep=5)
-    init = tf.global_variables_initializer()
+    summary_writer = tf.compat.v1.summary.FileWriter(log_dir, sess.graph)
+    saver = tf.compat.v1.train.Saver(tf.compat.v1.global_variables(), max_to_keep=5)
+    init = tf.compat.v1.global_variables_initializer()
     sess.run(init)
 
     if args.model_dir is not None:
@@ -335,19 +337,19 @@ def test_fn(args, data_reader, figure_dir=None, result_dir=None):
   with open(os.path.join(log_dir, 'config.log'), 'w') as fp:
     fp.write('\n'.join("%s: %s" % item for item in vars(config).items()))
 
-  with tf.name_scope('Input_Batch'):
+  with tf.compat.v1.name_scope('Input_Batch'):
     batch = data_reader.dequeue(args.batch_size)
 
   model = Model(config, input_batch=batch, mode='test')
-  sess_config = tf.ConfigProto()
+  sess_config = tf.compat.v1.ConfigProto()
   sess_config.gpu_options.allow_growth = True
   sess_config.log_device_placement = False
 
-  with tf.Session(config=sess_config) as sess:
+  with tf.compat.v1.Session(config=sess_config) as sess:
 
-    summary_writer = tf.summary.FileWriter(log_dir, sess.graph)
-    saver = tf.train.Saver(tf.global_variables(), max_to_keep=5)
-    init = tf.global_variables_initializer()
+    summary_writer = tf.compat.v1.summary.FileWriter(log_dir, sess.graph)
+    saver = tf.compat.v1.train.Saver(tf.compat.v1.global_variables(), max_to_keep=5)
+    init = tf.compat.v1.global_variables_initializer()
     sess.run(init)
 
     logging.info("restoring models...")
@@ -416,19 +418,19 @@ def pred_fn(args, data_reader, figure_dir=None, result_dir=None, log_dir=None):
   with open(os.path.join(log_dir, 'config.log'), 'w') as fp:
     fp.write('\n'.join("%s: %s" % item for item in vars(config).items()))
 
-  with tf.name_scope('Input_Batch'):
+  with tf.compat.v1.name_scope('Input_Batch'):
    data_batch = data_reader.dataset(args.batch_size)
 
   # model = Model(config, input_batch=batch, mode='pred')
   model = Model(config, mode='pred')
-  sess_config = tf.ConfigProto()
+  sess_config = tf.compat.v1.ConfigProto()
   sess_config.gpu_options.allow_growth = True
-  sess_config.log_device_placement = False
+  #sess_config.log_device_placement = False
 
-  with tf.Session(config=sess_config) as sess:
+  with tf.compat.v1.Session(config=sess_config) as sess:
 
-    saver = tf.train.Saver(tf.global_variables())
-    init = tf.global_variables_initializer()
+    saver = tf.compat.v1.train.Saver(tf.compat.v1.global_variables())
+    init = tf.compat.v1.global_variables_initializer()
     sess.run(init)
 
     logging.info("restoring models...")
@@ -500,7 +502,7 @@ def main(args):
   coord = tf.train.Coordinator()
 
   if args.mode == "train":
-    with tf.name_scope('create_inputs'):
+    with tf.compat.v1.name_scope('create_inputs'):
       data_reader = DataReader(
           signal_dir=args.train_signal_dir,
           signal_list=args.train_signal_list,
@@ -523,7 +525,7 @@ def main(args):
     train_fn(args, data_reader, data_reader_valid)
   
   elif args.mode == "valid" or args.mode == "test":
-    with tf.name_scope('create_inputs'):
+    with tf.compat.v1.name_scope('create_inputs'):
       data_reader = DataReader_test(
           signal_dir=args.valid_signal_dir,
           signal_list=args.valid_signal_list,
@@ -535,7 +537,7 @@ def main(args):
     test_fn(args, data_reader)
 
   elif args.mode == "pred":
-    with tf.name_scope('create_inputs'):
+    with tf.compat.v1.name_scope('create_inputs'):
       data_reader = DataReader_pred(
           signal_dir=args.data_dir,
           signal_list=args.data_list,

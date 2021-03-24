@@ -2,8 +2,6 @@
 Zhu, W., Mousavi, S. M., & Beroza, G. C. (2018). Seismic Signal Denoising and Decomposition Using Deep Neural Networks. arXiv preprint [arXiv:1811.02695](https://arxiv.org/abs/1811.02695).
 
 ## 1. Install
-The code is tested under python3.6
-
 ### Using virtualenv
 ```bash
 pip install virtualenv
@@ -13,9 +11,9 @@ pip install -r requirements.txt
 ```
 ### Using ananconda
 ```bash
-conda create --name venv python=3.6
+conda create --name venv
 conda activate venv
-conda install tensorflow=1.10 matplotlib scipy pandas tqdm
+conda install tensorflow matplotlib scipy pandas tqdm
 ```
 
 ## 2. Demo data

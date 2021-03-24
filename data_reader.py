@@ -1,11 +1,11 @@
-from __future__ import print_function, division
+import tensorflow as tf
+tf.compat.v1.disable_eager_execution()
+#from tensorflow.python.ops.linalg_ops import norm
+#from tensorflow.python.util import nest
 import numpy as np
 import scipy.signal
 import pandas as pd
-from tensorflow.python.ops.linalg_ops import norm
 pd.options.mode.chained_assignment = None
-import tensorflow as tf
-from tensorflow.python.util import nest
 from scipy.interpolate import interp1d
 import threading
 import os
@@ -101,10 +101,10 @@ def py_func_decorator(output_types=None, output_shapes=None, name=None):
   def decorator(func):
     def call(*args, **kwargs):
       nonlocal output_shapes
-      flat_output_types = nest.flatten(output_types)
-      # flat_output_types = tf.nest.flatten(output_types)
-      flat_values = tf.py_func(
-      # flat_values = tf.numpy_function(
+      #flat_output_types = nest.flatten(output_types)
+      flat_output_types = tf.nest.flatten(output_types)
+      # flat_values = tf.py_func(
+      flat_values = tf.numpy_function(
         func, 
         inp=args, 
         Tout=flat_output_types,
@@ -113,8 +113,8 @@ def py_func_decorator(output_types=None, output_shapes=None, name=None):
       if output_shapes is not None:
         for v, s in zip(flat_values, output_shapes):
           v.set_shape(s)
-      return nest.pack_sequence_as(output_types, flat_values)
-      # return tf.nest.pack_sequence_as(output_types, flat_values)
+      # return nest.pack_sequence_as(output_types, flat_values)
+      return tf.nest.pack_sequence_as(output_types, flat_values)
     return call
   return decorator
 
@@ -164,9 +164,9 @@ class DataReader(object):
 
   def add_queue(self):
     with tf.device('/cpu:0'):
-      self.sample_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
-      self.target_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
-      self.queue = tf.PaddingFIFOQueue(self.queue_size,
+      self.sample_placeholder = tf.compat.v1.placeholder(dtype=tf.float32, shape=None)
+      self.target_placeholder = tf.compat.v1.placeholder(dtype=tf.float32, shape=None)
+      self.queue = tf.queue.PaddingFIFOQueue(self.queue_size,
                                       ['float32', 'float32'],
                                       shapes=[self.config.X_shape, self.config.Y_shape])
       self.enqueue = self.queue.enqueue([self.sample_placeholder, self.target_placeholder])
@@ -351,13 +351,13 @@ class DataReader_test(DataReader):
     self.buffer_channels_noise = {}
 
   def add_queue(self):
-    self.sample_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
-    self.target_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
-    self.ratio_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
-    self.signal_placeholder = tf.placeholder(dtype=tf.complex64, shape=None)
-    self.noise_placeholder = tf.placeholder(dtype=tf.complex64, shape=None)
-    self.fname_placeholder = tf.placeholder(dtype=tf.string, shape=None)
-    self.queue = tf.PaddingFIFOQueue(self.queue_size,
+    self.sample_placeholder = tf.compat.v1.placeholder(dtype=tf.float32, shape=None)
+    self.target_placeholder = tf.compat.v1.placeholder(dtype=tf.float32, shape=None)
+    self.ratio_placeholder = tf.compat.v1.placeholder(dtype=tf.float32, shape=None)
+    self.signal_placeholder = tf.compat.v1.placeholder(dtype=tf.complex64, shape=None)
+    self.noise_placeholder = tf.compat.v1.placeholder(dtype=tf.complex64, shape=None)
+    self.fname_placeholder = tf.compat.v1.placeholder(dtype=tf.string, shape=None)
+    self.queue = tf.queue.PaddingFIFOQueue(self.queue_size,
                                      ['float32', 'float32', 'float32', 'complex64', 'complex64', 'string'],
                                      shapes=[self.config.X_shape, self.config.Y_shape, [], self.config.signal_shape, self.config.noise_shape, []])
     self.enqueue = self.queue.enqueue(
@@ -470,10 +470,10 @@ class DataReader_pred_queue(DataReader):
     self.add_placeholder()
   
   def add_placeholder(self):
-    self.sample_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
-    self.ratio_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
-    self.fname_placeholder = tf.placeholder(dtype=tf.string, shape=None)
-    self.queue = tf.PaddingFIFOQueue(self.queue_size,
+    self.sample_placeholder = tf.compat.v1.placeholder(dtype=tf.float32, shape=None)
+    self.ratio_placeholder = tf.compat.v1.placeholder(dtype=tf.float32, shape=None)
+    self.fname_placeholder = tf.compat.v1.placeholder(dtype=tf.string, shape=None)
+    self.queue = tf.queue.PaddingFIFOQueue(self.queue_size,
                                      ['float32', 'float32', 'string'],
                                      shapes=[self.config.X_shape, [], []])
     self.enqueue = self.queue.enqueue([self.sample_placeholder, self.ratio_placeholder, self.fname_placeholder])
@@ -555,9 +555,9 @@ class DataReader_pred():
 
   def dataset(self, batch_size, num_parallel_calls=4):
     dataset = dataset_map(self, output_types=(self.dtype, self.dtype, "string"),
-                          output_shapes=(self.X_shape, self.X_shape[1], 1), 
+                          output_shapes=(self.X_shape, self.X_shape[1], None), 
                           num_parallel_calls=num_parallel_calls)
-    dataset = dataset.batch(batch_size).prefetch(batch_size*3).make_one_shot_iterator().get_next()
+    dataset = tf.compat.v1.data.make_one_shot_iterator(dataset.batch(batch_size).prefetch(batch_size*3)).get_next()
     return dataset
 
 if __name__ == "__main__":
@@ -568,7 +568,7 @@ if __name__ == "__main__":
   noisy_signal, std_noisy_signal, fname  = data_reader[0]
   print(noisy_signal.shape, std_noisy_signal.shape, fname)
   batch = data_reader.dataset(10)
-  init = tf.initialize_all_variables()
-  sess = tf.Session()
+  init = tf.compat.v1.initialize_all_variables()
+  sess = tf.compat.v1.Session()
   sess.run(init)
   print(sess.run(batch))
