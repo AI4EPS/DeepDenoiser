@@ -478,7 +478,7 @@ def pred_fn(args, data_reader, figure_dir=None, result_dir=None, log_dir=None):
       pool.map(partial(postprocessing_pred,
                        preds = preds_batch, 
                        X = X_batch*ratio_batch[:,np.newaxis,:,np.newaxis],
-                       fname = fname_batch.astype('U13'),
+                       fname = [x.decode() for x in fname_batch],
                        figure_dir = figure_dir, 
                        result_dir = result_dir), 
                range(len(X_batch)))
