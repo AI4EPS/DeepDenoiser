@@ -8,6 +8,39 @@ from util import *
 tf.compat.v1.disable_eager_execution()
 
 
+class ModelConfig:
+
+    batch_size = 20
+    depths = 6
+    filters_root = 8
+    kernel_size = [3, 3]
+    pool_size = [2, 2]
+    dilation_rate = [1, 1]
+    class_weights = [1.0, 1.0, 1.0]
+    loss_type = "cross_entropy"
+    weight_decay = 0.0
+    optimizer = "adam"
+    momentum = 0.9
+    learning_rate = 0.01
+    decay_step = 1e9
+    decay_rate = 0.9
+    drop_rate = 0.0
+    summary = True
+
+    X_shape = [31, 201, 2]
+    n_channel = X_shape[-1]
+    Y_shape = [31, 201, 2]
+    n_class = Y_shape[-1]
+
+    def __init__(self, **kwargs):
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+    def update_args(self, args):
+        for k, v in vars(args).items():
+            setattr(self, k, v)
+
+
 def crop_and_concat(net1, net2):
     """
     the size(net1) <= size(net2)
@@ -60,8 +93,8 @@ def crop_only(net1, net2):
     return net2_resize
 
 
-class Model:
-    def __init__(self, config, input_batch=None, mode='train'):
+class UNet:
+    def __init__(self, config=ModelConfig(), input_batch=None, mode='train'):
         self.depths = config.depths
         self.filters_root = config.filters_root
         self.kernel_size = config.kernel_size
@@ -89,10 +122,10 @@ class Model:
     def add_placeholders(self, input_batch=None, mode='train'):
         if input_batch is None:
             self.X = tf.compat.v1.placeholder(
-                dtype=tf.float32, shape=[None, self.X_shape[0], self.X_shape[1], self.X_shape[2]], name='X'
+                dtype=tf.float32, shape=[None, None, None, self.X_shape[-1]], name='X'
             )
             self.Y = tf.compat.v1.placeholder(
-                dtype=tf.float32, shape=[None, self.Y_shape[0], self.Y_shape[1], self.n_class], name='y'
+                dtype=tf.float32, shape=[None, None, None, self.n_class], name='y'
             )
         else:
             self.X = input_batch[0]
