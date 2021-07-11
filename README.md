@@ -48,4 +48,4 @@ Note: In the demo data, for simplicity we use the waveform before itp as noise s
 python deepdenoiser/train.py --mode=train --train_signal_dir=./Dataset/train --train_signal_list=./Dataset/train.csv --train_noise_dir=./Dataset/train --train_noise_list=./Dataset/train.csv --batch_size=20
 ~~~
 
-Please let us know of any bugs found in the code. Suggestions and collaborations are welcomed!
+Please let us know of any bugs found in the code. Suggestions and collaborations are welcomed
