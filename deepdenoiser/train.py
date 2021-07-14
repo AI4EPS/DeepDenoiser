@@ -23,94 +23,94 @@ def read_args():
 
   parser.add_argument("--mode",
                       default="train",
-                      help="train/valid/test/debug")
+                      help="train/valid/test/debug (default: train)")
 
   parser.add_argument("--epochs",
-                      default=100,
+                      default=10,
                       type=int,
                       help="Number of epochs (default: 10)")
 
   parser.add_argument("--batch_size",
                       default=20,
                       type=int,
-                      help="Batch size")
+                      help="Batch size (default: 20)")
 
   parser.add_argument("--learning_rate",
                       default=0.001,
                       type=float,
-                      help="learning rate")
+                      help="learning rate (default: 0.001)")
 
   parser.add_argument("--decay_step",
                       default=-1,
                       type=int,
-                      help="decay step")
+                      help="decay step (default: -1)")
 
   parser.add_argument("--decay_rate",
                       default=0.9,
                       type=float,
-                      help="decay rate")
+                      help="decay rate (default: 0.9)")
 
   parser.add_argument("--momentum",
                       default=0.9,
                       type=float,
-                      help="momentum")
+                      help="momentum (default: 0.9)")
 
   parser.add_argument("--filters_root",
                       default=8,
                       type=int,
-                      help="filters root")
+                      help="filters root (default: 8)")
 
   parser.add_argument("--depth",
                       default=6,
                       type=int,
-                      help="depth")
+                      help="depth (default: 6)")
 
   parser.add_argument("--kernel_size",
                       nargs="+",
                       type=int,
                       default=[3, 3],
-                      help="kernel size")
+                      help="kernel size (default: [3, 3]")
 
   parser.add_argument("--pool_size",
                       nargs="+",
                       type=int,
                       default=[2, 2],
-                      help="pool size")
+                      help="pool size (default: [2, 2]")
 
   parser.add_argument("--drop_rate",
                       default=0,
                       type=float,
-                      help="drop out rate")
+                      help="drop out rate (default: 0)")
 
   parser.add_argument("--dilation_rate",
                       nargs="+",
                       type=int,
                       default=[1, 1],
-                      help="dilation_rate")
+                      help="dilation_rate (default: [1, 1]")
 
   parser.add_argument("--loss_type",
                       default="cross_entropy",
-                      help="loss type: cross_entropy, IOU, mean_squared")
+                      help="loss type: cross_entropy, IOU, mean_squared (default: cross_entropy)")
 
   parser.add_argument("--weight_decay",
                       default=0,
                       type=float,
-                      help="weight decay")
+                      help="weight decay (default: 0)")
 
   parser.add_argument("--optimizer",
                       default="adam",
-                      help="optimizer: adam, momentum")
+                      help="optimizer: adam, momentum (default: adam)")
 
   parser.add_argument("--summary",
                       default=True,
                       type=bool,
-                      help="summary")
+                      help="summary (default: True)")
 
   parser.add_argument("--class_weights",
                       nargs="+",
                       default=[1, 1],
                       type=float,
-                      help="class weights")
+                      help="class weights (default: [1, 1]")
 
   parser.add_argument("--log_dir",
                       default="log",
@@ -118,12 +118,12 @@ def read_args():
 
   parser.add_argument("--model_dir",
                       default=None,
-                      help="Checkpoint directory (default: None)")
+                      help="Checkpoint directory")
 
   parser.add_argument("--num_plots",
                       default=10,
                       type=int,
-                      help="plotting trainning result")
+                      help="plotting trainning result (default: 10)")
 
   parser.add_argument("--input_length",
                       default=None,
@@ -132,40 +132,40 @@ def read_args():
   parser.add_argument("--sampling_rate",
                       default=100,
                       type=int,
-                      help="sampling rate of pred data")
+                      help="sampling rate of pred data in Hz (default: 100)")
 
   parser.add_argument("--train_signal_dir",
                       default="./Dataset/train/",
-                      help="Input file directory")
+                      help="Input file directory (default: ./Dataset/train/)")
   parser.add_argument("--train_signal_list",
                       default="./Dataset/train.csv",
-                      help="Input csv file")
+                      help="Input csv file (default: ./Dataset/train.csv)")
   parser.add_argument("--train_noise_dir",
                       default="./Dataset/train/",
-                      help="Input file directory")
+                      help="Input file directory (default: ./Dataset/train/)")
   parser.add_argument("--train_noise_list",
                       default="./Dataset/train.csv",
-                      help="Input csv file")
+                      help="Input csv file (default: ./Dataset/train.csv)")
 
   parser.add_argument("--valid_signal_dir",
                       default="./Dataset/",
-                      help="Input file directory")
+                      help="Input file directory (default: ./Dataset/)")
   parser.add_argument("--valid_signal_list",
                       default=None,
                       help="Input csv file")
   parser.add_argument("--valid_noise_dir",
                       default="./Dataset/",
-                      help="Input file directory")
+                      help="Input file directory (default: ./Dataset/)")
   parser.add_argument("--valid_noise_list",
                       default=None,
                       help="Input csv file")
 
   parser.add_argument("--data_dir",
                       default="./Dataset/pred/",
-                      help="Input file directory")
+                      help="Input file directory (default: ./Dataset/pred/)")
   parser.add_argument("--data_list",
                       default="./Dataset/pred.csv",
-                      help="Input csv file")
+                      help="Input csv file (default: ./Dataset/pred.csv)")
 
   parser.add_argument("--output_dir",
                       default=None,
