@@ -26,7 +26,7 @@ def read_args():
                       help="train/valid/test/debug")
 
   parser.add_argument("--epochs",
-                      default=100,
+                      default=10,
                       type=int,
                       help="Number of epochs (default: 10)")
 
