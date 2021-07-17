@@ -1,5 +1,8 @@
 ._*
+*.pyc
+.DS_Store
 log/
 .vscode/
 output/
+*_bak/
 test_data/
