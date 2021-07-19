@@ -23,7 +23,6 @@ def read_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--format", default="numpy", type=str, help="Input data format: numpy or mseed")
-    parser.add_argument("--epochs", default=100, type=int, help="Number of epochs (default: 10)")
     parser.add_argument("--batch_size", default=20, type=int, help="Batch size")
     parser.add_argument("--output_dir", default="output", help="Output directory (default: output)")
     parser.add_argument("--model_dir", default=None, help="Checkpoint directory (default: None)")
