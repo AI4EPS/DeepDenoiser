@@ -773,7 +773,7 @@ class DataReader_pred:
             t0 = "1970-01-01T00:00:00.000"
 
         if self.sampling_rate != 100:
-            logging.warning("Resample from {self.sampling_rate} to 100!")
+            logging.warning(f"Resample from {self.sampling_rate} to 100!")
             t = np.linspace(0, 1, data.shape[-1])
             t_interp = np.linspace(0, 1, np.int(np.around(data.shape[-1] * 100.0 / self.sampling_rate)))
             data = interp1d(t, data, kind="slinear")(t_interp)
