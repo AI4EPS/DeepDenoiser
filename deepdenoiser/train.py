@@ -8,7 +8,7 @@ import argparse
 import os
 import time
 import logging
-from model import Model
+from model import UNet
 from data_reader import *
 from util import *
 from tqdm import tqdm
@@ -238,7 +238,7 @@ def train_fn(args, data_reader, data_reader_valid=None):
     if data_reader_valid is not None:
       batch_valid = data_reader_valid.dequeue(args.batch_size)
 
-  model = Model(config)
+  model = UNet(config)
   sess_config = tf.compat.v1.ConfigProto()
   sess_config.gpu_options.allow_growth = True
   sess_config.log_device_placement = False
@@ -340,7 +340,7 @@ def test_fn(args, data_reader, figure_dir=None, result_dir=None):
   with tf.compat.v1.name_scope('Input_Batch'):
     batch = data_reader.dequeue(args.batch_size)
 
-  model = Model(config, input_batch=batch, mode='test')
+  model = UNet(config, input_batch=batch, mode='test')
   sess_config = tf.compat.v1.ConfigProto()
   sess_config.gpu_options.allow_growth = True
   sess_config.log_device_placement = False
@@ -421,8 +421,8 @@ def pred_fn(args, data_reader, figure_dir=None, result_dir=None, log_dir=None):
   with tf.compat.v1.name_scope('Input_Batch'):
    data_batch = data_reader.dataset(args.batch_size)
 
-  # model = Model(config, input_batch=batch, mode='pred')
-  model = Model(config, mode='pred')
+  # model = UNet(config, input_batch=batch, mode='pred')
+  model = UNet(config, mode='pred')
   sess_config = tf.compat.v1.ConfigProto()
   sess_config.gpu_options.allow_growth = True
   #sess_config.log_device_placement = False
