@@ -167,9 +167,14 @@ class Data(BaseModel):
     dt: float = 0.01
 
 
-@app.get("/predict")
+@app.post("/predict")
 def predict(data: Data):
 
     denoised = get_prediction(data)
 
     return denoised
+
+
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok"}
