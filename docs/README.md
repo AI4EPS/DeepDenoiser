@@ -1,6 +1,6 @@
 # DeepDenoiser: Seismic Signal Denoising and Decomposition Using Deep Neural Networks
 
-[![](https://github.com/wayneweiqiang/DeepDenoiser/workflows/documentation/badge.svg)](https://wayneweiqiang.github.io/DeepDenoiser)
+[![](https://github.com/wayneweiqiang/DeepDenoiser/workflows/documentation/badge.svg)](https://ai4eps.github.io/DeepDenoiser)
 ## 1.  Install [miniconda](https://docs.conda.io/en/latest/miniconda.html) and requirements
 - Download DeepDenoiser repository
 ```bash
