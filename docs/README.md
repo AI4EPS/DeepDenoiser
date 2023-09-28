@@ -4,7 +4,7 @@
 ## 1.  Install [miniconda](https://docs.conda.io/en/latest/miniconda.html) and requirements
 - Download DeepDenoiser repository
 ```bash
-git clone https://github.com/wayneweiqiang/DeeoDenoiser.git
+git clone https://github.com/wayneweiqiang/DeepDenoiser.git
 cd DeepDenoiser
 ```
 - Install to default environment
